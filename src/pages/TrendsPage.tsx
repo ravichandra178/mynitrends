@@ -17,6 +17,7 @@ export default function TrendsPage() {
   const [newTopic, setNewTopic] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [fetchingTrends, setFetchingTrends] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: trends = [], isLoading } = useQuery({ queryKey: ["trends"], queryFn: fetchTrends });
