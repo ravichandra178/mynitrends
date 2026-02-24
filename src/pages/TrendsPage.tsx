@@ -50,6 +50,24 @@ export default function TrendsPage() {
     }
   };
 
+  const handleFetchTrends = async () => {
+    setFetchingTrends(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-trends");
+      if (error) throw error;
+      if (data?.added > 0) {
+        toast.success(`Added ${data.added} trending topics`);
+        queryClient.invalidateQueries({ queryKey: ["trends"] });
+      } else {
+        toast.info(data?.message || "No new trends found");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to fetch trends");
+    } finally {
+      setFetchingTrends(false);
+    }
+  };
+
   return (
     <Layout>
       <PageHeader
