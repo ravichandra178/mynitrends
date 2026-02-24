@@ -14,7 +14,110 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      posts: {
+        Row: {
+          content: string
+          created_at: string
+          engagement_comments: number | null
+          engagement_likes: number | null
+          facebook_post_id: string | null
+          id: string
+          image_url: string | null
+          posted: boolean
+          scheduled_time: string | null
+          trend_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          engagement_comments?: number | null
+          engagement_likes?: number | null
+          facebook_post_id?: string | null
+          id?: string
+          image_url?: string | null
+          posted?: boolean
+          scheduled_time?: string | null
+          trend_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          engagement_comments?: number | null
+          engagement_likes?: number | null
+          facebook_post_id?: string | null
+          id?: string
+          image_url?: string | null
+          posted?: boolean
+          scheduled_time?: string | null
+          trend_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "posts_trend_id_fkey"
+            columns: ["trend_id"]
+            isOneToOne: false
+            referencedRelation: "trends"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      settings: {
+        Row: {
+          auto_post_enabled: boolean
+          created_at: string
+          facebook_page_access_token: string | null
+          facebook_page_id: string | null
+          id: string
+          max_posts_per_day: number
+          openai_api_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          auto_post_enabled?: boolean
+          created_at?: string
+          facebook_page_access_token?: string | null
+          facebook_page_id?: string | null
+          id?: string
+          max_posts_per_day?: number
+          openai_api_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          auto_post_enabled?: boolean
+          created_at?: string
+          facebook_page_access_token?: string | null
+          facebook_page_id?: string | null
+          id?: string
+          max_posts_per_day?: number
+          openai_api_key?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      trends: {
+        Row: {
+          created_at: string
+          id: string
+          source: string
+          topic: string
+          used: boolean
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          source?: string
+          topic: string
+          used?: boolean
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          source?: string
+          topic?: string
+          used?: boolean
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
