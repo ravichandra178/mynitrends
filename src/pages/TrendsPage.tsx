@@ -10,13 +10,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { fetchTrends, addTrend } from "@/lib/supabase-helpers";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Sparkles, Loader2 } from "lucide-react";
+import { Plus, Sparkles, Loader2, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
 
 export default function TrendsPage() {
   const [newTopic, setNewTopic] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [fetchingTrends, setFetchingTrends] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: trends = [], isLoading } = useQuery({ queryKey: ["trends"], queryFn: fetchTrends });
@@ -49,27 +50,51 @@ export default function TrendsPage() {
     }
   };
 
+  const handleFetchTrends = async () => {
+    setFetchingTrends(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-trends");
+      if (error) throw error;
+      if (data?.added > 0) {
+        toast.success(`Added ${data.added} trending topics`);
+        queryClient.invalidateQueries({ queryKey: ["trends"] });
+      } else {
+        toast.info(data?.message || "No new trends found");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to fetch trends");
+    } finally {
+      setFetchingTrends(false);
+    }
+  };
+
   return (
     <Layout>
       <PageHeader
         title="Trends"
         description="Manage trending topics and generate posts"
         actions={
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Trend</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Add New Trend</DialogTitle></DialogHeader>
-              <form
-                onSubmit={(e) => { e.preventDefault(); if (newTopic.trim()) addMutation.mutate(newTopic.trim()); }}
-                className="flex gap-2 mt-2"
-              >
-                <Input placeholder="Enter topic..." value={newTopic} onChange={(e) => setNewTopic(e.target.value)} />
-                <Button type="submit" disabled={addMutation.isPending}>Add</Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={handleFetchTrends} disabled={fetchingTrends}>
+              {fetchingTrends ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <TrendingUp className="h-4 w-4 mr-1" />}
+              Generate Trends
+            </Button>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Trend</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Add New Trend</DialogTitle></DialogHeader>
+                <form
+                  onSubmit={(e) => { e.preventDefault(); if (newTopic.trim()) addMutation.mutate(newTopic.trim()); }}
+                  className="flex gap-2 mt-2"
+                >
+                  <Input placeholder="Enter topic..." value={newTopic} onChange={(e) => setNewTopic(e.target.value)} />
+                  <Button type="submit" disabled={addMutation.isPending}>Add</Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         }
       />
 
