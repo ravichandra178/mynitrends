@@ -14,20 +14,16 @@ serve(async (req) => {
     if (!postId) throw new Error("Missing postId");
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const facebookPageId = Deno.env.get("FACEBOOK_PAGE_ID")!;
+    const facebookAccessToken = Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN")!;
 
     // Get post
     const { data: post, error: postError } = await supabase.from("posts").select("*").eq("id", postId).single();
     if (postError || !post) throw new Error("Post not found");
     if (post.posted) throw new Error("Already posted");
 
-    // Get settings
-    const { data: settings } = await supabase.from("settings").select("*").limit(1).single();
-    if (!settings?.facebook_page_id || !settings?.facebook_page_access_token) {
-      throw new Error("Facebook credentials not configured. Go to Settings.");
-    }
-
-    const pageId = settings.facebook_page_id;
-    const accessToken = settings.facebook_page_access_token;
+    const pageId = facebookPageId;
+    const accessToken = facebookAccessToken;
 
     let fbPostId: string;
 

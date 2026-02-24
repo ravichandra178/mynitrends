@@ -15,15 +15,16 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
+    const groqApiKey = Deno.env.get("GROQ_API_KEY")!;
+    const huggingFaceApiKey = Deno.env.get("HUGGINGFACE_API_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Step 1: Generate post content via AI
-    const contentRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const contentRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${lovableApiKey}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${groqApiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "mixtral-8x7b-32768",
         messages: [
           {
             role: "system",
@@ -51,45 +52,51 @@ Rules:
     const postContent = contentData.choices?.[0]?.message?.content?.trim();
     if (!postContent) throw new Error("Empty content from AI");
 
-    // Step 2: Generate image via AI
-    const imageRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${lovableApiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [
-          {
-            role: "user",
-            content: `Create a 1080x1080 social media post image. Dark background, minimal design. Bold centered white text headline: "${postContent.split("\n")[0]}". Clean, professional, modern. No cluttered elements.`,
-          },
-        ],
-        modalities: ["image", "text"],
-      }),
-    });
-
+    // Step 2: Generate image via Hugging Face
     let imageUrl = null;
-    if (imageRes.ok) {
-      const imageData = await imageRes.json();
-      const base64Image = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-      if (base64Image) {
-        // Upload to storage
-        const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, "");
-        const imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+    try {
+      const imagePrompt = `Facebook post image about ${topic}. Social media style, vibrant colors, modern design, engaging visual. Text: "${postContent.split("\n")[0]}"`;
+      
+      const imageRes = await fetch("https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-3.5-large", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${huggingFaceApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          inputs: imagePrompt,
+          parameters: {
+            negative_prompt: "low quality, blurry, distorted",
+            height: 1080,
+            width: 1080,
+            guidance_scale: 7.5,
+            num_inference_steps: 30,
+          },
+        }),
+      });
+
+      if (imageRes.ok) {
+        const imageBlob = await imageRes.blob();
         const fileName = `post-${trendId}-${Date.now()}.png`;
 
         const { error: uploadError } = await supabase.storage
           .from("post-images")
-          .upload(fileName, imageBytes, { contentType: "image/png" });
+          .upload(fileName, imageBlob, { contentType: "image/png" });
 
         if (!uploadError) {
           const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(fileName);
           imageUrl = urlData.publicUrl;
+          console.log("Image generated and uploaded successfully");
         } else {
           console.error("Upload error:", uploadError);
         }
+      } else {
+        const err = await imageRes.text();
+        console.error("Image generation error:", err);
       }
-    } else {
-      console.error("Image generation failed:", await imageRes.text());
+    } catch (imgError) {
+      console.error("Image generation failed:", imgError);
+      // Continue without image if generation fails
     }
 
     // Step 3: Insert post

@@ -11,15 +11,17 @@ serve(async (req) => {
 
   try {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const facebookPageId = Deno.env.get("FACEBOOK_PAGE_ID")!;
+    const facebookAccessToken = Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN")!;
+    const autoPostEnabled = Deno.env.get("AUTO_POST_ENABLED") === "true";
+    const maxPostsPerDay = parseInt(Deno.env.get("MAX_POSTS_PER_DAY") || "3");
 
-    // Get settings
-    const { data: settings } = await supabase.from("settings").select("*").limit(1).single();
-    if (!settings?.auto_post_enabled) {
+    if (!autoPostEnabled) {
       return new Response(JSON.stringify({ message: "Auto post disabled" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (!settings.facebook_page_id || !settings.facebook_page_access_token) {
+    if (!facebookPageId || !facebookAccessToken) {
       return new Response(JSON.stringify({ message: "Facebook not configured" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -34,7 +36,7 @@ serve(async (req) => {
       .eq("posted", true)
       .gte("created_at", todayStart.toISOString());
 
-    if ((postsToday ?? 0) >= settings.max_posts_per_day) {
+    if ((postsToday ?? 0) >= maxPostsPerDay) {
       return new Response(JSON.stringify({ message: "Daily limit reached" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -48,7 +50,7 @@ serve(async (req) => {
       .eq("posted", false)
       .lte("scheduled_time", now)
       .order("scheduled_time", { ascending: true })
-      .limit(settings.max_posts_per_day - (postsToday ?? 0));
+      .limit(maxPostsPerDay - (postsToday ?? 0));
 
     if (!duePosts || duePosts.length === 0) {
       return new Response(JSON.stringify({ message: "No posts due" }), {
@@ -67,9 +69,9 @@ serve(async (req) => {
           const imgBlob = await imgRes.blob();
           formData.append("source", imgBlob, "image.png");
           formData.append("caption", post.content);
-          formData.append("access_token", settings.facebook_page_access_token);
+          formData.append("access_token", facebookAccessToken);
 
-          const fbRes = await fetch(`https://graph.facebook.com/${settings.facebook_page_id}/photos`, {
+          const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/photos`, {
             method: "POST",
             body: formData,
           });
@@ -77,10 +79,10 @@ serve(async (req) => {
           if (fbData.error) throw new Error(fbData.error.message);
           fbPostId = fbData.post_id || fbData.id;
         } else {
-          const fbRes = await fetch(`https://graph.facebook.com/${settings.facebook_page_id}/feed`, {
+          const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/feed`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: post.content, access_token: settings.facebook_page_access_token }),
+            body: JSON.stringify({ message: post.content, access_token: facebookAccessToken }),
           });
           const fbData = await fbRes.json();
           if (fbData.error) throw new Error(fbData.error.message);
@@ -91,7 +93,7 @@ serve(async (req) => {
 
         // Fetch engagement
         const engRes = await fetch(
-          `https://graph.facebook.com/${fbPostId}?fields=likes.summary(true),comments.summary(true)&access_token=${settings.facebook_page_access_token}`
+          `https://graph.facebook.com/${fbPostId}?fields=likes.summary(true),comments.summary(true)&access_token=${facebookAccessToken}`
         );
         const engData = await engRes.json();
         if (!engData.error) {
