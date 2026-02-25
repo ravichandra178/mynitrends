@@ -14,18 +14,27 @@ console.log(`Initializing database with URL: ${dbUrl ? "***" : "NOT SET"}`);
 
 if (!dbUrl) {
   console.error("ERROR: DATABASE_URL environment variable is not set!");
-} else {
-  // For Prisma Postgres: ensure database name is present
-  // Format: postgresql://user:pass@host:port/dbname?params
-  // If missing database name, append /postgres
-  if (!dbUrl.match(/\/[a-zA-Z0-9_-]+(\?|$)/)) {
-    const parts = dbUrl.split("?");
-    dbUrl = parts[0] + "/postgres" + (parts[1] ? "?" + parts[1] : "");
-    console.log("✅ Added database name to DATABASE_URL");
-  }
+  throw new Error("DATABASE_URL is required");
 }
 
-const pool = new Pool(dbUrl || "postgresql://localhost/mynitrends", {
+// Parse URL to check if database name is present
+try {
+  const url = new URL(dbUrl);
+  // If pathname is empty or just "/" then database name is missing
+  if (!url.pathname || url.pathname === "/") {
+    // Add /postgres as database name
+    const newUrl = dbUrl.includes("?") 
+      ? dbUrl.replace("?", "/postgres?") 
+      : dbUrl + "/postgres";
+    dbUrl = newUrl;
+    console.log("✅ Added /postgres to DATABASE_URL");
+  }
+} catch (e) {
+  console.error("Failed to parse DATABASE_URL:", e);
+  throw new Error(`Invalid DATABASE_URL format: ${e}`);
+}
+
+const pool = new Pool(dbUrl, {
   max: 3,
 });
 
