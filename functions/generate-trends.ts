@@ -16,12 +16,9 @@ export async function generateTrends(dbUrl: string, groqApiKey: string): Promise
       model: "qwen/qwen3-32b",
       messages: [
         {
-          role: "system",
-          content: `You are a social media trend analyst. Your task is to identify 5 current trending topics for social media content creators.
+          role: "user",
+          content: `Return ONLY a JSON array with exactly 5 social media trends. No markdown, no thinking, no explanation. Just valid JSON.
 
-CRITICAL: Return ONLY a valid JSON array. Do not include any markdown, code blocks, thinking, or text outside the JSON array.
-
-Example format:
 [
   {"topic": "AI Content Tools", "source": "TikTok"},
   {"topic": "Short Form Video", "source": "YouTube Shorts"},
@@ -29,14 +26,10 @@ Example format:
   {"topic": "Authenticity & Transparency", "source": "Twitter/X"},
   {"topic": "Interactive Storytelling", "source": "TikTok"}
 ]`
-        },
-        {
-          role: "user",
-          content: "Generate ONLY a JSON array with 5 current social media trends. No thinking, no explanation, just the JSON array."
         }
       ],
-      max_tokens: 500,
-      temperature: 0.7,
+      max_tokens: 400,
+      temperature: 0.3,
     }),
   });
 
@@ -58,24 +51,28 @@ Example format:
       throw new Error("Response is not an array");
     }
   } catch (e) {
-    console.error("Primary JSON parse failed:", e);
+    console.error("Primary JSON parse failed, attempting to extract JSON...");
     
-    // Try to extract JSON array from response (in case of extra text)
-    const jsonMatch = response.match(/\[\s*\{[\s\S]*?\}\s*\]/);
-    if (jsonMatch) {
+    // Try to extract JSON array from response (removes thinking text, etc.)
+    // Match from first [ to last ]
+    const startIdx = response.indexOf('[');
+    const endIdx = response.lastIndexOf(']');
+    
+    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+      const jsonStr = response.substring(startIdx, endIdx + 1);
       try {
-        trends = JSON.parse(jsonMatch[0]);
+        trends = JSON.parse(jsonStr);
         if (!Array.isArray(trends)) {
           throw new Error("Extracted response is not an array");
         }
         console.log("Successfully extracted JSON from response");
       } catch (e2) {
         console.error("Failed to parse extracted JSON:", e2);
-        console.error("Raw response:", response.substring(0, 500));
+        console.error("Raw response (first 500 chars):", response.substring(0, 500));
         throw new Error(`Could not parse JSON from GROQ response: ${String(e2)}`);
       }
     } else {
-      console.error("No JSON array found in response. Raw response:", response.substring(0, 500));
+      console.error("No JSON array markers found in response. Raw response:", response.substring(0, 500));
       throw new Error("No valid JSON array found in GROQ response");
     }
   }

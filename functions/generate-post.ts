@@ -5,7 +5,7 @@ export async function generatePost(dbUrl: string, hfApiKey: string, trendId: str
     throw new Error("HUGGINGFACE_API_KEY not configured");
   }
 
-  // Call Hugging Face API with Qwen3-32B
+  // Call Hugging Face API with a text generation model
   const hfRes = await fetch("https://router.huggingface.co/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -13,7 +13,7 @@ export async function generatePost(dbUrl: string, hfApiKey: string, trendId: str
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "Qwen/Qwen3-32B-Instruct",
+      model: "meta-llama/Llama-2-7b-chat",
       messages: [
         {
           role: "system",
