@@ -1,0 +1,10 @@
+{
+  "tasks": {
+    "dev": "deno run --allow-all --unstable main.ts",
+    "start": "deno run --allow-all --unstable main.ts"
+  },
+  "imports": {
+    "std/": "https://deno.land/std@0.168.0/",
+    "postgres": "https://deno.land/x/postgres@v0.17.0/mod.ts"
+  }
+}
