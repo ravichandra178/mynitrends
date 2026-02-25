@@ -54,41 +54,62 @@ Just the post text.`
   console.log("Generating image with model:", hfModel);
   let imageUrl = null;
   
-  try {
-    const imagePrompt = `Professional social media image for #${topic}. Modern, engaging, trendy design. High quality.`;
-    console.log("Image prompt:", imagePrompt);
-    
-    const hfImageRes = await fetch(
-      "https://api-inference.huggingface.co/models/" + hfModel,
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${hfApiKey}`,
-        },
-        body: JSON.stringify({
-          inputs: imagePrompt,
-        }),
-        signal: AbortSignal.timeout(30000) // 30 second timeout for image generation
-      }
-    );
-
-    console.log("Image response status:", hfImageRes.status);
-    
-    if (hfImageRes.ok) {
-      const imageBuffer = await hfImageRes.arrayBuffer();
+  // Fallback models if primary fails (these are free serverless inference enabled)
+  const imageModels = [
+    hfModel,
+    "stabilityai/stable-diffusion-v1-5", // Free serverless inference
+    "runwayml/stable-diffusion-v1-5", // Alternative
+    "prompthero/openjourney-v4", // Alternative
+  ];
+  
+  for (const model of imageModels) {
+    try {
+      const imagePrompt = `Professional social media image for #${topic}. Modern, engaging, trendy design. High quality.`;
+      console.log(`[IMAGE] Attempting with model: ${model}`);
       
-      // Convert to base64
-      const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
-      imageUrl = `data:image/png;base64,${base64Image}`;
-      console.log("Image generated successfully, size:", imageBuffer.byteLength, "bytes");
-    } else {
-      const errorText = await hfImageRes.text();
-      console.error("Image generation HTTP error:", hfImageRes.status, errorText.substring(0, 500));
-      console.log("Skipping image - continuing without it");
+      const hfImageRes = await fetch(
+        "https://api-inference.huggingface.co/models/" + model,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${hfApiKey}`,
+          },
+          body: JSON.stringify({
+            inputs: imagePrompt,
+          }),
+          signal: AbortSignal.timeout(30000) // 30 second timeout for image generation
+        }
+      );
+
+      console.log(`[IMAGE] Response status: ${hfImageRes.status} from model: ${model}`);
+      
+      if (hfImageRes.ok) {
+        const imageBuffer = await hfImageRes.arrayBuffer();
+        
+        // Convert to base64
+        const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+        imageUrl = `data:image/png;base64,${base64Image}`;
+        console.log(`[IMAGE] ✅ SUCCESS with ${model}, size:`, imageBuffer.byteLength, "bytes");
+        break; // Success, exit loop
+      } else {
+        const errorText = await hfImageRes.text();
+        console.error(`[IMAGE] ❌ HTTP ${hfImageRes.status} from ${model}, trying next...`);
+        if (hfImageRes.status !== 410 && hfImageRes.status !== 429) {
+          // If not 410 (Gone) or 429 (Rate limited), don't continue trying
+          if (model === hfModel) {
+            // Only warn if it's the primary model
+            console.log(`[IMAGE] Model ${model} not available for free inference, trying alternatives...`);
+          }
+        }
+      }
+    } catch (e) {
+      console.error(`[IMAGE] ❌ Error with ${model}:`, e);
+      continue; // Try next model
     }
-  } catch (e) {
-    console.error("Error generating image:", e);
-    console.log("Skipping image - continuing without it");
+  }
+  
+  if (!imageUrl) {
+    console.log("[IMAGE] ⚠️ No image models available, continuing without image");
   }
 
   // Save post with image to database
