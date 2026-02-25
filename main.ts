@@ -218,21 +218,47 @@ async function handleGeneratePost(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: "Missing trendId or topic" }), { status: 400, headers: corsHeaders });
     }
 
-    // Call the actual generate-post function from Deno Deploy
-    const deploymentUrl = Deno.env.get("DENO_DEPLOYMENT_ID") 
-      ? `https://${Deno.env.get("DENO_DEPLOYMENT_ID")}.deno.dev`
-      : "http://localhost:8000";
-    
-    const funcRes = await fetch(`${deploymentUrl}/functions/v1/generate-post`, {
+    const groqApiKey = Deno.env.get("GROQ_API_KEY");
+    if (!groqApiKey) {
+      return new Response(JSON.stringify({ error: "GROQ_API_KEY not configured" }), { status: 500, headers: corsHeaders });
+    }
+
+    // Call GROQ API to generate post content
+    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trendId, topic }),
+      headers: {
+        "Authorization": `Bearer ${groqApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "mixtral-8x7b-32768",
+        messages: [
+          {
+            role: "user",
+            content: `Generate a compelling social media post about "${topic}". Keep it under 280 characters, engaging and shareable.`
+          }
+        ],
+        max_tokens: 150,
+      }),
     });
 
-    if (!funcRes.ok) throw new Error("Failed to generate post");
-    const data = await funcRes.json();
-    
-    return new Response(JSON.stringify(data), {
+    if (!groqRes.ok) {
+      const error = await groqRes.text();
+      throw new Error(`GROQ API error: ${error}`);
+    }
+
+    const groqData = await groqRes.json();
+    const content = groqData.choices[0].message.content;
+
+    // Save post to database
+    const client = await getConnection();
+    const result = await client.queryObject(
+      "INSERT INTO posts (trend_id, content, created_at) VALUES ($1, $2, NOW()) RETURNING *",
+      [trendId, content]
+    );
+    await client.end();
+
+    return new Response(JSON.stringify(result.rows[0]), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 201,
     });
@@ -244,20 +270,62 @@ async function handleGeneratePost(req: Request): Promise<Response> {
 
 async function handleGenerateTrends(req: Request): Promise<Response> {
   try {
-    const deploymentUrl = Deno.env.get("DENO_DEPLOYMENT_ID") 
-      ? `https://${Deno.env.get("DENO_DEPLOYMENT_ID")}.deno.dev`
-      : "http://localhost:8000";
-    
-    const funcRes = await fetch(`${deploymentUrl}/functions/v1/generate-trends`, {
+    const groqApiKey = Deno.env.get("GROQ_API_KEY");
+    if (!groqApiKey) {
+      return new Response(JSON.stringify({ error: "GROQ_API_KEY not configured" }), { status: 500, headers: corsHeaders });
+    }
+
+    // Call GROQ API to generate trending topics
+    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Authorization": `Bearer ${groqApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "mixtral-8x7b-32768",
+        messages: [
+          {
+            role: "user",
+            content: `Generate 5 trending topics for a social media content creator. Return as JSON array of objects with "topic" and "source" fields. Example: [{"topic": "AI trends", "source": "groq"}]. Only return valid JSON, no other text.`
+          }
+        ],
+        max_tokens: 300,
+      }),
     });
 
-    if (!funcRes.ok) throw new Error("Failed to generate trends");
-    const data = await funcRes.json();
+    if (!groqRes.ok) {
+      const error = await groqRes.text();
+      throw new Error(`GROQ API error: ${error}`);
+    }
+
+    const groqData = await groqRes.json();
+    const response = groqData.choices[0].message.content;
     
-    return new Response(JSON.stringify(data), {
+    // Parse JSON response
+    const jsonMatch = response.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      throw new Error("Invalid response format from GROQ");
+    }
+    const trends = JSON.parse(jsonMatch[0]);
+
+    // Save trends to database
+    const client = await getConnection();
+    const savedTrends = [];
+    
+    for (const trend of trends) {
+      const result = await client.queryObject(
+        "INSERT INTO trends (topic, source, used, created_at) VALUES ($1, $2, $3, NOW()) RETURNING *",
+        [trend.topic || trend, trend.source || "groq", false]
+      );
+      savedTrends.push(result.rows[0]);
+    }
+    
+    await client.end();
+
+    return new Response(JSON.stringify(savedTrends), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 201,
     });
   } catch (e) {
     console.error("POST /api/generate-trends error:", e);
