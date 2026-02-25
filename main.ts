@@ -1,5 +1,4 @@
 /// <reference lib="deno.window" />
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 
 const corsHeaders = {
@@ -349,7 +348,34 @@ async function handleTestConnection(req: Request): Promise<Response> {
   }
 }
 
-serve(async (req) => {
+// Test database connection on startup
+async function testDatabaseConnection() {
+  try {
+    console.log("🔍 Testing database connection...");
+    const dbUrl = getDatabaseUrl();
+    const client = new Client({
+      connectionString: dbUrl,
+    });
+    await client.connect();
+    
+    // Get list of tables
+    const result = await client.queryObject(
+      `SELECT table_name FROM information_schema.tables WHERE table_schema='public'`
+    );
+    
+    console.log("✅ Database connection successful!");
+    console.log("📋 Available tables:", result.rows.map((row: any) => row.table_name).join(", "));
+    
+    await client.end();
+  } catch (error) {
+    console.error("❌ Database connection failed:", error);
+  }
+}
+
+// Test connection on startup
+await testDatabaseConnection();
+
+Deno.serve(async (req) => {
   const url = new URL(req.url);
   const path = url.pathname;
   const method = req.method;
