@@ -10,7 +10,7 @@ export async function generatePost(
     throw new Error("HUGGINGFACE_API_KEY not configured");
   }
 
-  const hfModel = Deno.env.get("HF_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2";
+  const hfModel = Deno.env.get("HF_MODEL") || "deepgenteam/DeepGen-1.0";
 
   // Generate post text using Hugging Face
   const hfRes = await fetch("https://router.huggingface.co/v1/chat/completions", {

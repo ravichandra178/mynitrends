@@ -19,19 +19,12 @@ export async function generateTrends(dbUrl: string, groqApiKey: string): Promise
       messages: [
         {
           role: "user",
-          content: `Return ONLY a JSON array with exactly 5 social media trends. No markdown, no thinking, no explanation. Just valid JSON.
-
-[
-  {"topic": "AI Content Tools", "source": "TikTok"},
-  {"topic": "Short Form Video", "source": "YouTube Shorts"},
-  {"topic": "Community Building", "source": "Instagram"},
-  {"topic": "Authenticity & Transparency", "source": "Twitter/X"},
-  {"topic": "Interactive Storytelling", "source": "TikTok"}
-]`
+          content: `List exactly 5 current social media trending topics. Return ONLY the topics as a simple comma-separated list.
+Example: AI tools, Short videos, Community building, Authenticity, Interactive content`
         }
       ],
-      max_tokens: 400,
-      temperature: 0.3,
+      max_tokens: 150,
+      temperature: 0.7,
     }),
   });
 
@@ -41,54 +34,32 @@ export async function generateTrends(dbUrl: string, groqApiKey: string): Promise
   }
 
   const groqData = await groqRes.json();
-  const response = groqData.choices[0].message.content;
+  const response = groqData.choices[0].message.content.trim();
   
-  // Parse JSON response
-  let trends: any[] = [];
-  
-  try {
-    // First try direct JSON parse
-    trends = JSON.parse(response);
-    if (!Array.isArray(trends)) {
-      throw new Error("Response is not an array");
-    }
-  } catch (e) {
-    console.error("Primary JSON parse failed, attempting to extract JSON...");
-    
-    // Try to extract JSON array from response (removes thinking text, etc.)
-    const startIdx = response.indexOf('[');
-    const endIdx = response.lastIndexOf(']');
-    
-    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-      const jsonStr = response.substring(startIdx, endIdx + 1);
-      try {
-        trends = JSON.parse(jsonStr);
-        if (!Array.isArray(trends)) {
-          throw new Error("Extracted response is not an array");
-        }
-        console.log("Successfully extracted JSON from response");
-      } catch (e2) {
-        console.error("Failed to parse extracted JSON:", e2);
-        console.log("Using fallback trends array");
-        trends = [
-          { topic: "AI Content Tools", source: "TikTok" },
-          { topic: "Short Form Video", source: "YouTube Shorts" },
-          { topic: "Community Building", source: "Instagram" },
-          { topic: "Authenticity & Transparency", source: "Twitter/X" },
-          { topic: "Interactive Storytelling", source: "TikTok" }
-        ];
-      }
-    } else {
-      console.error("No JSON array markers found in response");
-      console.log("Using fallback trends array");
-      trends = [
-        { topic: "AI Content Tools", source: "TikTok" },
-        { topic: "Short Form Video", source: "YouTube Shorts" },
-        { topic: "Community Building", source: "Instagram" },
-        { topic: "Authenticity & Transparency", source: "Twitter/X" },
-        { topic: "Interactive Storytelling", source: "TikTok" }
-      ];
-    }
+  // Parse simple comma-separated list
+  const topicList = response
+    .split(',')
+    .map((t: string) => t.trim())
+    .filter((t: string) => t.length > 0)
+    .slice(0, 5);
+
+  // Create trend objects from the list
+  const trends = topicList.map((topic: string) => ({
+    topic: topic,
+    source: "social_media"
+  }));
+
+  // Fallback if we didn't get enough topics
+  if (trends.length < 5) {
+    console.log("Using fallback trends array");
+    const fallbackTrends = [
+      { topic: "AI Content Tools", source: "TikTok" },
+      { topic: "Short Form Video", source: "YouTube Shorts" },
+      { topic: "Community Building", source: "Instagram" },
+      { topic: "Authenticity & Transparency", source: "Twitter/X" },
+      { topic: "Interactive Storytelling", source: "TikTok" }
+    ];
+    trends.push(...fallbackTrends.slice(trends.length));
   }
 
   // Save trends to database
@@ -101,7 +72,7 @@ export async function generateTrends(dbUrl: string, groqApiKey: string): Promise
     for (const trend of trends) {
       const result = await client.queryObject(
         "INSERT INTO trends (topic, source, used, created_at) VALUES ($1, $2, $3, NOW()) RETURNING *",
-        [trend.topic || trend, trend.source || "qwen", false]
+        [trend.topic, trend.source, false]
       );
       savedTrends.push(result.rows[0]);
     }
