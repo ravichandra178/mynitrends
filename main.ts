@@ -9,13 +9,21 @@ const corsHeaders = {
 };
 
 // Initialize database pool
-const pool = new Pool(Deno.env.get("DATABASE_URL")!, {
+const dbUrl = Deno.env.get("DATABASE_URL");
+console.log(`Initializing database with URL: ${dbUrl ? "***" : "NOT SET"}`);
+
+if (!dbUrl) {
+  console.error("ERROR: DATABASE_URL environment variable is not set!");
+}
+
+const pool = new Pool(dbUrl || "postgresql://localhost/mynitrends", {
   max: 3,
 });
 
 async function getConnection() {
   return pool.connect();
 }
+
 
 async function handleTrendsList(req: Request): Promise<Response> {
   if (req.method !== "GET") return new Response("Method not allowed", { status: 405 });
@@ -346,31 +354,54 @@ async function handleTestConnection(req: Request): Promise<Response> {
 serve(async (req) => {
   const url = new URL(req.url);
   const path = url.pathname;
+  const method = req.method;
+
+  console.log(`[${new Date().toISOString()}] ${method} ${path}`);
 
   // Handle CORS preflight
-  if (req.method === "OPTIONS") {
+  if (method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Route to appropriate handler
-  if (path === "/api/trends" && req.method === "GET") return handleTrendsList(req);
-  if (path === "/api/trends" && req.method === "POST") return handleTrendsCreate(req);
-  if (path === "/api/posts" && req.method === "GET") return handlePostsList(req);
-  if (path.startsWith("/api/posts/") && req.method === "DELETE") {
-    const postId = path.split("/")[3];
-    return handlePostDelete(req, postId);
+  // Health check endpoint
+  if (path === "/health") {
+    const dbUrl = Deno.env.get("DATABASE_URL");
+    return new Response(JSON.stringify({
+      status: "ok",
+      database: dbUrl ? "configured" : "not configured",
+      timestamp: new Date().toISOString(),
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
-  if (path.startsWith("/api/posts/") && req.method === "PATCH") {
-    const postId = path.split("/")[3];
-    return handlePostUpdate(req, postId);
+
+  // API Routes - handle these FIRST before static files
+  try {
+    if (path === "/api/trends" && method === "GET") return await handleTrendsList(req);
+    if (path === "/api/trends" && method === "POST") return await handleTrendsCreate(req);
+    if (path === "/api/posts" && method === "GET") return await handlePostsList(req);
+    if (path.startsWith("/api/posts/") && method === "DELETE") {
+      const postId = path.split("/")[3];
+      return await handlePostDelete(req, postId);
+    }
+    if (path.startsWith("/api/posts/") && method === "PATCH") {
+      const postId = path.split("/")[3];
+      return await handlePostUpdate(req, postId);
+    }
+    if (path === "/api/settings" && method === "GET") return await handleSettingsGet(req);
+    if (path === "/api/settings" && method === "PATCH") return await handleSettingsUpdate(req);
+    if (path === "/api/generate-post" && method === "POST") return await handleGeneratePost(req);
+    if (path === "/api/generate-trends" && method === "POST") return await handleGenerateTrends(req);
+    if (path === "/api/post-to-facebook" && method === "POST") return await handlePostToFacebook(req);
+    if (path === "/api/fetch-engagement" && method === "POST") return await handleFetchEngagement(req);
+    if (path === "/api/test-connection" && method === "POST") return await handleTestConnection(req);
+  } catch (e) {
+    console.error(`Error handling ${method} ${path}:`, e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
-  if (path === "/api/settings" && req.method === "GET") return handleSettingsGet(req);
-  if (path === "/api/settings" && req.method === "PATCH") return handleSettingsUpdate(req);
-  if (path === "/api/generate-post") return handleGeneratePost(req);
-  if (path === "/api/generate-trends") return handleGenerateTrends(req);
-  if (path === "/api/post-to-facebook") return handlePostToFacebook(req);
-  if (path === "/api/fetch-engagement") return handleFetchEngagement(req);
-  if (path === "/api/test-connection") return handleTestConnection(req);
 
   // Serve static files for SPA
   if (path === "/" || path === "/index.html") {
@@ -380,12 +411,13 @@ serve(async (req) => {
       return new Response(content, {
         headers: { "Content-Type": "text/html", ...corsHeaders },
       });
-    } catch {
+    } catch (e) {
+      console.error(`Error serving index.html:`, e);
       return new Response("Not found", { status: 404, headers: corsHeaders });
     }
   }
 
-  // Serve other static files
+  // Serve other static files (but not /api/ paths)
   if (!path.startsWith("/api/")) {
     const staticPath = `./dist${path}`;
     try {
@@ -403,14 +435,16 @@ serve(async (req) => {
       return new Response(content, {
         headers: { "Content-Type": contentType, ...corsHeaders },
       });
-    } catch {
+    } catch (e) {
+      console.log(`Static file not found: ${staticPath}, falling back to SPA`);
       // Fall back to SPA index.html for client-side routing
       try {
         const content = await Deno.readFile("./dist/index.html");
         return new Response(content, {
           headers: { "Content-Type": "text/html", ...corsHeaders },
         });
-      } catch {
+      } catch (err) {
+        console.error(`Error serving SPA fallback:`, err);
         return new Response("Not found", { status: 404, headers: corsHeaders });
       }
     }
