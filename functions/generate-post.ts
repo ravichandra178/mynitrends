@@ -50,35 +50,45 @@ Just the post text.`
     postText = `Check out our latest insights on ${topic}! 🚀 Stay tuned for more updates.`;
   }
 
-  // Generate image using the configured HF_MODEL (Stable Diffusion by default)
+  // Generate image using the configured HF_MODEL
   console.log("Generating image with model:", hfModel);
   let imageUrl = null;
   
   try {
-    const hfImageRes = await fetch(`https://api-inference.huggingface.co/models/${hfModel}`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${hfApiKey}`,
-      },
-      body: JSON.stringify({
-        inputs: `Professional social media image for #${topic}. Modern, engaging, trendy design. High quality.`,
-      }),
-    });
+    const imagePrompt = `Professional social media image for #${topic}. Modern, engaging, trendy design. High quality.`;
+    console.log("Image prompt:", imagePrompt);
+    
+    const hfImageRes = await fetch(
+      "https://api-inference.huggingface.co/models/" + hfModel,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${hfApiKey}`,
+        },
+        body: JSON.stringify({
+          inputs: imagePrompt,
+        }),
+        signal: AbortSignal.timeout(30000) // 30 second timeout for image generation
+      }
+    );
 
+    console.log("Image response status:", hfImageRes.status);
+    
     if (hfImageRes.ok) {
       const imageBuffer = await hfImageRes.arrayBuffer();
       
       // Convert to base64
       const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
       imageUrl = `data:image/png;base64,${base64Image}`;
-      console.log("Image generated successfully");
+      console.log("Image generated successfully, size:", imageBuffer.byteLength, "bytes");
     } else {
-      const error = await hfImageRes.text();
-      console.error("Image generation failed:", error);
-      console.log("Falling back - skipping image generation");
+      const errorText = await hfImageRes.text();
+      console.error("Image generation HTTP error:", hfImageRes.status, errorText.substring(0, 500));
+      console.log("Skipping image - continuing without it");
     }
   } catch (e) {
     console.error("Error generating image:", e);
+    console.log("Skipping image - continuing without it");
   }
 
   // Save post with image to database
