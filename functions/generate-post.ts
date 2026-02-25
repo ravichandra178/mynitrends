@@ -2,23 +2,25 @@ import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 
 export async function generatePost(
   dbUrl: string,
-  groqApiKey: string,
+  hfApiKey: string,
   trendId: string,
   topic: string
 ): Promise<any> {
-  if (!groqApiKey) {
-    throw new Error("GROQ_API_KEY not configured");
+  if (!hfApiKey) {
+    throw new Error("HUGGINGFACE_API_KEY not configured");
   }
 
-  // Generate post text using GROQ with Qwen3-32B
-  const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const hfModel = Deno.env.get("HF_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2";
+
+  // Generate post text using Hugging Face
+  const hfRes = await fetch("https://router.huggingface.co/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${groqApiKey}`,
+      "Authorization": `Bearer ${hfApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "qwen/qwen3-32b",
+      model: hfModel,
       messages: [
         {
           role: "user",
@@ -34,21 +36,13 @@ Just the post text.`
     }),
   });
 
-  if (!groqRes.ok) {
-    const error = await groqRes.text();
-    throw new Error(`GROQ API error: ${error}`);
+  if (!hfRes.ok) {
+    const error = await hfRes.text();
+    throw new Error(`Hugging Face API error: ${error}`);
   }
 
-  const groqData = await groqRes.json();
-  let postText = groqData.choices[0].message.content.trim();
-
-  // Clean up any thinking text if present
-  if (postText.includes("<think>")) {
-    const endThink = postText.indexOf("</think>");
-    if (endThink !== -1) {
-      postText = postText.substring(endThink + 8).trim();
-    }
-  }
+  const hfData = await hfRes.json();
+  let postText = hfData.choices[0].message.content.trim();
 
   // Fallback if no content
   if (!postText || postText.length === 0) {

@@ -5,7 +5,9 @@ export async function generateAutoreply(dbUrl: string, groqApiKey: string, comme
     throw new Error("GROQ_API_KEY not configured");
   }
 
-  // Call GROQ API with Qwen3-32B
+  // Call GROQ API with configurable model
+  const groqModel = Deno.env.get("GROQ_MODEL") || "qwen/qwen3-32b";
+  
   const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -13,7 +15,7 @@ export async function generateAutoreply(dbUrl: string, groqApiKey: string, comme
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "qwen/qwen3-32b",
+      model: groqModel,
       messages: [
         {
           role: "system",
