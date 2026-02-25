@@ -243,13 +243,14 @@ async function handleGeneratePost(req: Request): Promise<Response> {
 async function handleGenerateTrends(req: Request): Promise<Response> {
   try {
     const groqApiKey = Deno.env.get("GROQ_API_KEY");
+    const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
     const dbUrl = getDatabaseUrl();
     
-    if (!groqApiKey) {
-      return new Response(JSON.stringify({ error: "GROQ_API_KEY not configured" }), { status: 500, headers: corsHeaders });
+    if (!groqApiKey && !hfApiKey) {
+      return new Response(JSON.stringify({ error: "GROQ_API_KEY or HUGGINGFACE_API_KEY required" }), { status: 500, headers: corsHeaders });
     }
 
-    const trends = await generateTrends(dbUrl, groqApiKey);
+    const trends = await generateTrends(dbUrl, groqApiKey, hfApiKey);
 
     return new Response(JSON.stringify(trends), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

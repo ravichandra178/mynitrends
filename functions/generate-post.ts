@@ -13,6 +13,7 @@ export async function generatePost(
   const hfModel = Deno.env.get("HF_MODEL") || "deepgenteam/DeepGen-1.0";
 
   // Generate post text using Hugging Face
+  const hfTextModel = Deno.env.get("HF_TEXT_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2";
   const hfTextRes = await fetch("https://router.huggingface.co/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -20,7 +21,7 @@ export async function generatePost(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "mistralai/Mistral-7B-Instruct-v0.2",
+      model: hfTextModel,
       messages: [
         {
           role: "user",
@@ -49,7 +50,7 @@ Just the post text.`
     postText = `Check out our latest insights on ${topic}! 🚀 Stay tuned for more updates.`;
   }
 
-  // Generate image using the configured HF_MODEL (likely DeepGen-1.0)
+  // Generate image using the configured HF_MODEL (Stable Diffusion by default)
   console.log("Generating image with model:", hfModel);
   let imageUrl = null;
   
@@ -60,7 +61,7 @@ Just the post text.`
         "Authorization": `Bearer ${hfApiKey}`,
       },
       body: JSON.stringify({
-        inputs: `Create a professional social media image for hashtag #${topic}. Modern design, high quality, engaging, trendy.`,
+        inputs: `Professional social media image for #${topic}. Modern, engaging, trendy design. High quality.`,
       }),
     });
 
@@ -74,6 +75,7 @@ Just the post text.`
     } else {
       const error = await hfImageRes.text();
       console.error("Image generation failed:", error);
+      console.log("Falling back - skipping image generation");
     }
   } catch (e) {
     console.error("Error generating image:", e);
