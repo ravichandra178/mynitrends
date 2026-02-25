@@ -1,46 +1,39 @@
 import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 
-export async function generatePost(dbUrl: string, groqApiKey: string, trendId: string, topic: string): Promise<any> {
-  if (!groqApiKey) {
-    throw new Error("GROQ_API_KEY not configured");
+export async function generatePost(dbUrl: string, hfApiKey: string, trendId: string, topic: string): Promise<any> {
+  if (!hfApiKey) {
+    throw new Error("HUGGINGFACE_API_KEY not configured");
   }
 
-  // Call GROQ API to generate post content
-  const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  // Call Hugging Face API with Qwen3-32B
+  const hfRes = await fetch("https://api-inference.huggingface.co/models/Qwen/Qwen3-32B-Instruct", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${groqApiKey}`,
+      "Authorization": `Bearer ${hfApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "llama-3.1-70b-versatile", // Updated model
-      messages: [
-        {
-          role: "system",
-          content: `You are a social media copywriter. Generate compelling Facebook posts.
+      inputs: `You are a social media copywriter. Generate a compelling social media post about: "${topic}". 
 Rules:
 - Keep under 280 characters
 - Engaging and shareable
-- Include a call-to-action
-- Add 3-5 relevant hashtags`
-        },
-        {
-          role: "user",
-          content: `Generate a social media post about: "${topic}"`
-        }
-      ],
-      max_tokens: 200,
-      temperature: 0.8,
+- Include call-to-action
+- Add 3-5 relevant hashtags
+Return only the post text.`,
+      parameters: {
+        max_new_tokens: 200,
+        temperature: 0.8,
+      },
     }),
   });
 
-  if (!groqRes.ok) {
-    const error = await groqRes.text();
-    throw new Error(`GROQ API error: ${error}`);
+  if (!hfRes.ok) {
+    const error = await hfRes.text();
+    throw new Error(`Hugging Face API error: ${error}`);
   }
 
-  const groqData = await groqRes.json();
-  const content = groqData.choices[0].message.content;
+  const hfData = await hfRes.json();
+  const content = Array.isArray(hfData) ? hfData[0].generated_text : hfData.generated_text;
 
   // Save post to database
   const client = new Client(dbUrl);
@@ -56,3 +49,5 @@ Rules:
     await client.end();
   }
 }
+
+

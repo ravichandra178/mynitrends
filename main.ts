@@ -2,6 +2,7 @@
 import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 import { generatePost } from "./functions/generate-post.ts";
 import { generateTrends } from "./functions/generate-trends.ts";
+import { generateAutoreply } from "./functions/generate-autoreply.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -220,14 +221,14 @@ async function handleGeneratePost(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: "Missing trendId or topic" }), { status: 400, headers: corsHeaders });
     }
 
-    const groqApiKey = Deno.env.get("GROQ_API_KEY");
+    const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
     const dbUrl = getDatabaseUrl();
     
-    if (!groqApiKey) {
-      return new Response(JSON.stringify({ error: "GROQ_API_KEY not configured" }), { status: 500, headers: corsHeaders });
+    if (!hfApiKey) {
+      return new Response(JSON.stringify({ error: "HUGGINGFACE_API_KEY not configured" }), { status: 500, headers: corsHeaders });
     }
 
-    const post = await generatePost(dbUrl, groqApiKey, trendId, topic);
+    const post = await generatePost(dbUrl, hfApiKey, trendId, topic);
 
     return new Response(JSON.stringify(post), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -314,6 +315,32 @@ async function handleFetchEngagement(req: Request): Promise<Response> {
     });
   } catch (e) {
     console.error("POST /api/fetch-engagement error:", e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleGenerateAutoreply(req: Request): Promise<Response> {
+  try {
+    const { postId, comment } = await req.json();
+    if (!postId || !comment) {
+      return new Response(JSON.stringify({ error: "Missing postId or comment" }), { status: 400, headers: corsHeaders });
+    }
+
+    const groqApiKey = Deno.env.get("GROQ_API_KEY");
+    const dbUrl = getDatabaseUrl();
+    
+    if (!groqApiKey) {
+      return new Response(JSON.stringify({ error: "GROQ_API_KEY not configured" }), { status: 500, headers: corsHeaders });
+    }
+
+    const autoreply = await generateAutoreply(dbUrl, groqApiKey, comment, postId);
+
+    return new Response(JSON.stringify(autoreply), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 201,
+    });
+  } catch (e) {
+    console.error("POST /api/generate-autoreply error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers: corsHeaders });
   }
 }
@@ -526,6 +553,7 @@ Deno.serve(async (req) => {
     if (path === "/api/settings" && method === "PATCH") return await handleSettingsUpdate(req);
     if (path === "/api/generate-post" && method === "POST") return await handleGeneratePost(req);
     if (path === "/api/generate-trends" && method === "POST") return await handleGenerateTrends(req);
+    if (path === "/api/generate-autoreply" && method === "POST") return await handleGenerateAutoreply(req);
     if (path === "/api/post-to-facebook" && method === "POST") return await handlePostToFacebook(req);
     if (path === "/api/fetch-engagement" && method === "POST") return await handleFetchEngagement(req);
     if (path === "/api/test-connection" && method === "POST") return await handleTestConnection(req);

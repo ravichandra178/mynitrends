@@ -5,7 +5,7 @@ export async function generateTrends(dbUrl: string, groqApiKey: string): Promise
     throw new Error("GROQ_API_KEY not configured");
   }
 
-  // Call GROQ API to generate trending topics
+  // Call GROQ API with Qwen3-32B
   const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -13,11 +13,21 @@ export async function generateTrends(dbUrl: string, groqApiKey: string): Promise
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "llama-3.1-70b-versatile", // Updated model
+      model: "qwen/qwen3-32b",
       messages: [
         {
+          role: "system",
+          content: `You are a social media trend analyst. Identify current trending topics relevant to social media marketing.
+Return ONLY a valid JSON array of trend objects with this exact structure:
+[
+  {"topic": "Trend Topic", "source": "Source Name"},
+  ...
+]
+Do not include markdown, code blocks, or any text outside the JSON array.`
+        },
+        {
           role: "user",
-          content: `Generate 5 trending topics for a social media content creator. Return ONLY a valid JSON array of objects with "topic" and "source" fields. Example: [{"topic": "AI trends", "source": "groq"}]`,
+          content: "Generate 5 current social media trends for content creators."
         }
       ],
       max_tokens: 300,
@@ -36,7 +46,7 @@ export async function generateTrends(dbUrl: string, groqApiKey: string): Promise
   // Parse JSON response
   const jsonMatch = response.match(/\[[\s\S]*\]/);
   if (!jsonMatch) {
-    throw new Error("Invalid response format from GROQ");
+    throw new Error("Invalid response format from Qwen");
   }
   const trends = JSON.parse(jsonMatch[0]);
 
@@ -50,7 +60,7 @@ export async function generateTrends(dbUrl: string, groqApiKey: string): Promise
     for (const trend of trends) {
       const result = await client.queryObject(
         "INSERT INTO trends (topic, source, used, created_at) VALUES ($1, $2, $3, NOW()) RETURNING *",
-        [trend.topic || trend, trend.source || "groq", false]
+        [trend.topic || trend, trend.source || "qwen", false]
       );
       savedTrends.push(result.rows[0]);
     }
