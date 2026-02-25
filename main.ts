@@ -8,38 +8,46 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
 };
 
-// Initialize database pool
-let dbUrl = Deno.env.get("DATABASE_URL");
-console.log(`Initializing database with URL: ${dbUrl ? "***" : "NOT SET"}`);
+// Database pool initialization - deferred until first use
+let pool: Pool | null = null;
 
-if (!dbUrl) {
-  console.error("ERROR: DATABASE_URL environment variable is not set!");
-  throw new Error("DATABASE_URL is required");
-}
+function initializePool(): Pool {
+  if (pool) return pool;
 
-// Parse URL to check if database name is present
-try {
-  const url = new URL(dbUrl);
-  // If pathname is empty or just "/" then database name is missing
-  if (!url.pathname || url.pathname === "/") {
-    // Add /postgres as database name
-    const newUrl = dbUrl.includes("?") 
-      ? dbUrl.replace("?", "/postgres?") 
-      : dbUrl + "/postgres";
-    dbUrl = newUrl;
-    console.log("✅ Added /postgres to DATABASE_URL");
+  let dbUrl = Deno.env.get("DATABASE_URL");
+  console.log(`Initializing database with URL: ${dbUrl ? "***" : "NOT SET"}`);
+
+  if (!dbUrl) {
+    console.error("ERROR: DATABASE_URL environment variable is not set!");
+    throw new Error("DATABASE_URL is required");
   }
-} catch (e) {
-  console.error("Failed to parse DATABASE_URL:", e);
-  throw new Error(`Invalid DATABASE_URL format: ${e}`);
-}
 
-const pool = new Pool(dbUrl, {
-  max: 3,
-});
+  // Parse URL to check if database name is present
+  try {
+    const url = new URL(dbUrl);
+    // If pathname is empty or just "/" then database name is missing
+    if (!url.pathname || url.pathname === "/") {
+      // Add /postgres as database name
+      const newUrl = dbUrl.includes("?") 
+        ? dbUrl.replace("?", "/postgres?") 
+        : dbUrl + "/postgres";
+      dbUrl = newUrl;
+      console.log("✅ Added /postgres to DATABASE_URL");
+    }
+  } catch (e) {
+    console.error("Failed to parse DATABASE_URL:", e);
+    throw new Error(`Invalid DATABASE_URL format: ${e}`);
+  }
+
+  pool = new Pool(dbUrl, {
+    max: 3,
+  });
+  return pool;
+}
 
 async function getConnection() {
-  return pool.connect();
+  const p = initializePool();
+  return await p.connect();
 }
 
 
