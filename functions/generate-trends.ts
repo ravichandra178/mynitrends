@@ -113,8 +113,9 @@ Example: #ShortFormVideo,#AITools,#ContentCreators,#CommunityBuilding,#Authentic
     }
   }
   
-  // Fall back to RSS/Google Trends if AI fails
+  // Fall back to RSS/Google Trends if AI fails - ONLY RSS, no static fallback
   if (!response) {
+    console.log("AI trends generation failed, fetching from Google Trends RSS...");
     const rssResponse = await fetchTrendsFromRSS();
     if (rssResponse) {
       try {
@@ -137,12 +138,14 @@ Example: #ShortFormVideo,#AITools,#ContentCreators,#CommunityBuilding,#Authentic
             await client.end();
           }
           
+          console.log("Saved RSS trends:", savedTrends);
           return savedTrends;
         }
       } catch (e) {
         console.error("RSS parsing error:", e);
       }
     }
+    throw new Error("Failed to fetch trends from AI and RSS");
   }
   
   // Parse hashtag list - extract everything between # symbols
@@ -155,19 +158,6 @@ Example: #ShortFormVideo,#AITools,#ContentCreators,#CommunityBuilding,#Authentic
       topic: hashtag.replace('#', ''), // Remove # for storage
       source: source
     }));
-
-  // Fallback if we didn't get enough topics
-  if (trends.length < 5) {
-    console.log("Using hardcoded fallback trends array");
-    const fallbackTrends = [
-      { topic: "ShortFormVideo", source: "fallback" },
-      { topic: "AITools", source: "fallback" },
-      { topic: "ContentCreators", source: "fallback" },
-      { topic: "CommunityBuilding", source: "fallback" },
-      { topic: "AuthenticContent", source: "fallback" }
-    ];
-    trends.push(...fallbackTrends.slice(trends.length));
-  }
 
   // Save trends to database
   const client = new Client(dbUrl);
