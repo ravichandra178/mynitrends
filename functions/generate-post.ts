@@ -60,7 +60,7 @@ Just the post text.`
         "Authorization": `Bearer ${hfApiKey}`,
       },
       body: JSON.stringify({
-        inputs: `Professional social media image for: ${topic}. Modern design, high quality, engaging.`,
+        inputs: `Create a professional social media image for hashtag #${topic}. Modern design, high quality, engaging, trendy.`,
       }),
     });
 

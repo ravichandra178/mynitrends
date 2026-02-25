@@ -19,12 +19,13 @@ export async function generateTrends(dbUrl: string, groqApiKey: string): Promise
       messages: [
         {
           role: "user",
-          content: `List exactly 5 current social media trending topics. Return ONLY the topics as a simple comma-separated list.
-Example: AI tools, Short videos, Community building, Authenticity, Interactive content`
+          content: `List exactly 5 current social media hashtags that are trending right now. Return ONLY the hashtags as a comma-separated list. Start each with #.
+
+Example format: #ShortFormVideo,#AITools,#ContentCreators,#CommunityBuilding,#AuthenticContent`
         }
       ],
-      max_tokens: 150,
-      temperature: 0.7,
+      max_tokens: 100,
+      temperature: 0.3,
     }),
   });
 
@@ -36,28 +37,26 @@ Example: AI tools, Short videos, Community building, Authenticity, Interactive c
   const groqData = await groqRes.json();
   const response = groqData.choices[0].message.content.trim();
   
-  // Parse simple comma-separated list
-  const topicList = response
-    .split(',')
-    .map((t: string) => t.trim())
-    .filter((t: string) => t.length > 0)
-    .slice(0, 5);
-
-  // Create trend objects from the list
-  const trends = topicList.map((topic: string) => ({
-    topic: topic,
-    source: "social_media"
-  }));
+  // Parse hashtag list - extract everything between # symbols
+  const hashtagMatches = response.match(/#[\w]+/g) || [];
+  
+  // Create trend objects from hashtags
+  const trends = hashtagMatches
+    .slice(0, 5)
+    .map((hashtag: string) => ({
+      topic: hashtag.replace('#', ''), // Remove # for storage
+      source: "hashtag"
+    }));
 
   // Fallback if we didn't get enough topics
   if (trends.length < 5) {
     console.log("Using fallback trends array");
     const fallbackTrends = [
-      { topic: "AI Content Tools", source: "TikTok" },
-      { topic: "Short Form Video", source: "YouTube Shorts" },
-      { topic: "Community Building", source: "Instagram" },
-      { topic: "Authenticity & Transparency", source: "Twitter/X" },
-      { topic: "Interactive Storytelling", source: "TikTok" }
+      { topic: "ShortFormVideo", source: "hashtag" },
+      { topic: "AITools", source: "hashtag" },
+      { topic: "ContentCreators", source: "hashtag" },
+      { topic: "CommunityBuilding", source: "hashtag" },
+      { topic: "AuthenticContent", source: "hashtag" }
     ];
     trends.push(...fallbackTrends.slice(trends.length));
   }
