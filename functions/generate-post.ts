@@ -13,14 +13,14 @@ export async function generatePost(
   const hfModel = Deno.env.get("HF_MODEL") || "deepgenteam/DeepGen-1.0";
 
   // Generate post text using Hugging Face
-  const hfRes = await fetch("https://router.huggingface.co/v1/chat/completions", {
+  const hfTextRes = await fetch("https://router.huggingface.co/v1/chat/completions", {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${hfApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: hfModel,
+      model: "mistralai/Mistral-7B-Instruct-v0.2",
       messages: [
         {
           role: "user",
@@ -36,29 +36,70 @@ Just the post text.`
     }),
   });
 
-  if (!hfRes.ok) {
-    const error = await hfRes.text();
-    throw new Error(`Hugging Face API error: ${error}`);
+  if (!hfTextRes.ok) {
+    const error = await hfTextRes.text();
+    throw new Error(`Hugging Face text generation error: ${error}`);
   }
 
-  const hfData = await hfRes.json();
-  let postText = hfData.choices[0].message.content.trim();
+  const hfTextData = await hfTextRes.json();
+  let postText = hfTextData.choices[0].message.content.trim();
 
   // Fallback if no content
   if (!postText || postText.length === 0) {
     postText = `Check out our latest insights on ${topic}! 🚀 Stay tuned for more updates.`;
   }
 
-  // Save post to database
+  // Generate image using the configured HF_MODEL (likely DeepGen-1.0)
+  console.log("Generating image with model:", hfModel);
+  let imageUrl = null;
+  
+  try {
+    const hfImageRes = await fetch(`https://api-inference.huggingface.co/models/${hfModel}`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${hfApiKey}`,
+      },
+      body: JSON.stringify({
+        inputs: `Professional social media image for: ${topic}. Modern design, high quality, engaging.`,
+      }),
+    });
+
+    if (hfImageRes.ok) {
+      const imageBuffer = await hfImageRes.arrayBuffer();
+      
+      // Convert to base64
+      const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+      imageUrl = `data:image/png;base64,${base64Image}`;
+      console.log("Image generated successfully");
+    } else {
+      const error = await hfImageRes.text();
+      console.error("Image generation failed:", error);
+    }
+  } catch (e) {
+    console.error("Error generating image:", e);
+  }
+
+  // Save post with image to database
   const client = new Client(dbUrl);
   await client.connect();
 
   try {
-    const result = await client.queryObject(
-      `INSERT INTO posts (trend_id, content, created_at) 
-       VALUES ($1, $2, NOW()) RETURNING *`,
-      [trendId, postText]
-    );
+    let result;
+    if (imageUrl) {
+      // Save with image
+      result = await client.queryObject(
+        `INSERT INTO posts (trend_id, content, image_url, created_at) 
+         VALUES ($1, $2, $3, NOW()) RETURNING *`,
+        [trendId, postText, imageUrl]
+      );
+    } else {
+      // Save without image
+      result = await client.queryObject(
+        `INSERT INTO posts (trend_id, content, created_at) 
+         VALUES ($1, $2, NOW()) RETURNING *`,
+        [trendId, postText]
+      );
+    }
 
     return result.rows[0];
   } finally {
