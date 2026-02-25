@@ -10,8 +10,7 @@ const corsHeaders = {
 // Get DATABASE_URL with proper formatting
 function getDatabaseUrl(): string {
   let dbUrl = Deno.env.get("DATABASE_URL");
-  console.log(`Database URL: ${dbUrl ? "***" : "NOT SET"}`);
-
+  
   if (!dbUrl) {
     throw new Error("DATABASE_URL environment variable is not set!");
   }
@@ -19,14 +18,19 @@ function getDatabaseUrl(): string {
   // Parse URL to check if database name is present
   try {
     const url = new URL(dbUrl);
+    console.log(`Parsed URL - hostname: ${url.hostname}, pathname: "${url.pathname}", search: "${url.search}"`);
+    
     // If pathname is empty or just "/" then database name is missing
     if (!url.pathname || url.pathname === "/") {
-      // Add /postgres as database name
-      const newUrl = dbUrl.includes("?") 
-        ? dbUrl.replace("?", "/postgres?") 
-        : dbUrl + "/postgres";
-      dbUrl = newUrl;
-      console.log("✅ Added /postgres to DATABASE_URL");
+      console.log("❌ Missing database name in URL - appending /postgres");
+      
+      // Rebuild URL with database name
+      const baseUrl = `${url.protocol}//${url.username ? url.username + ':' + url.password + '@' : ''}${url.hostname}${url.port ? ':' + url.port : ''}/postgres`;
+      dbUrl = baseUrl + url.search;
+      
+      console.log(`✅ Modified URL: ${baseUrl.substring(0, 60)}...`);
+    } else {
+      console.log(`✅ URL already has database: ${url.pathname}`);
     }
   } catch (e) {
     console.error("Failed to parse DATABASE_URL:", e);
@@ -353,9 +357,7 @@ async function testDatabaseConnection() {
   try {
     console.log("🔍 Testing database connection...");
     const dbUrl = getDatabaseUrl();
-    const client = new Client({
-      connectionString: dbUrl,
-    });
+    const client = new Client(dbUrl); // Pass URL string directly
     await client.connect();
     
     // Get list of tables
