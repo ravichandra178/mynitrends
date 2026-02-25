@@ -53,10 +53,8 @@ Just the post text.`
   // Generate image using working free tier models
   let imageUrl = null;
   const imageModels = [
-    hfModel || "black-forest-labs/FLUX.1-dev",
-    "black-forest-labs/FLUX.1-dev",
-    "Qwen/Qwen-Image",
-    "ByteDance/Hyper-SD",
+    "runwayml/stable-diffusion-v1-5",
+    "stabilityai/stable-diffusion-xl-base-1.0",
   ];
   
   for (const model of imageModels) {
