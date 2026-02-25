@@ -9,11 +9,20 @@ const corsHeaders = {
 };
 
 // Initialize database pool
-const dbUrl = Deno.env.get("DATABASE_URL");
+let dbUrl = Deno.env.get("DATABASE_URL");
 console.log(`Initializing database with URL: ${dbUrl ? "***" : "NOT SET"}`);
 
 if (!dbUrl) {
   console.error("ERROR: DATABASE_URL environment variable is not set!");
+} else {
+  // For Prisma Postgres: ensure database name is present
+  // Format: postgresql://user:pass@host:port/dbname?params
+  // If missing database name, append /postgres
+  if (!dbUrl.match(/\/[a-zA-Z0-9_-]+(\?|$)/)) {
+    const parts = dbUrl.split("?");
+    dbUrl = parts[0] + "/postgres" + (parts[1] ? "?" + parts[1] : "");
+    console.log("✅ Added database name to DATABASE_URL");
+  }
 }
 
 const pool = new Pool(dbUrl || "postgresql://localhost/mynitrends", {
