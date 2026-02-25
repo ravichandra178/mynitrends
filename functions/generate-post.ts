@@ -33,7 +33,21 @@ Return only the post text.`,
   }
 
   const hfData = await hfRes.json();
-  const content = Array.isArray(hfData) ? hfData[0].generated_text : hfData.generated_text;
+  let content = "";
+  
+  // Handle different response formats from HF
+  if (Array.isArray(hfData)) {
+    content = hfData[0]?.generated_text || hfData[0]?.text || String(hfData[0]);
+  } else if (hfData.generated_text) {
+    content = hfData.generated_text;
+  } else if (hfData.text) {
+    content = hfData.text;
+  } else {
+    content = JSON.stringify(hfData);
+  }
+
+  // Clean up the content if it has extra characters
+  content = content.trim();
 
   // Save post to database
   const client = new Client(dbUrl);

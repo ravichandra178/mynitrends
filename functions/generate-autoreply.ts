@@ -42,7 +42,7 @@ Rules:
   }
 
   const groqData = await groqRes.json();
-  const content = groqData.choices[0].message.content;
+  const content = groqData.choices?.[0]?.message?.content || String(groqData);
 
   // Save autoreply to database (optional - depends on your schema)
   const client = new Client(dbUrl);
