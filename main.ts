@@ -360,69 +360,95 @@ async function initializeDatabaseSchema() {
     const client = new Client(dbUrl);
     await client.connect();
     
-    // Create trends table
-    await client.queryObject(`
-      CREATE TABLE IF NOT EXISTS public.trends (
-        id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-        topic TEXT NOT NULL,
-        source TEXT NOT NULL DEFAULT 'manual',
-        used BOOLEAN NOT NULL DEFAULT false,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
-      )
-    `);
-    console.log("✅ trends table ready");
+    try {
+      // Create trends table
+      await client.queryObject(`
+        CREATE TABLE IF NOT EXISTS public.trends (
+          id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+          topic TEXT NOT NULL,
+          source TEXT NOT NULL DEFAULT 'manual',
+          used BOOLEAN NOT NULL DEFAULT false,
+          created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+        )
+      `);
+      console.log("✅ trends table ready");
+    } catch (e) {
+      console.log("⚠️ trends table:", e instanceof Error ? e.message : e);
+    }
     
-    // Create posts table
-    await client.queryObject(`
-      CREATE TABLE IF NOT EXISTS public.posts (
-        id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-        trend_id UUID REFERENCES public.trends(id) ON DELETE SET NULL,
-        content TEXT NOT NULL,
-        image_url TEXT,
-        scheduled_time TIMESTAMP WITH TIME ZONE,
-        posted BOOLEAN NOT NULL DEFAULT false,
-        facebook_post_id TEXT,
-        engagement_likes INTEGER DEFAULT 0,
-        engagement_comments INTEGER DEFAULT 0,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
-      )
-    `);
-    console.log("✅ posts table ready");
+    try {
+      // Create posts table
+      await client.queryObject(`
+        CREATE TABLE IF NOT EXISTS public.posts (
+          id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+          trend_id UUID REFERENCES public.trends(id) ON DELETE SET NULL,
+          content TEXT NOT NULL,
+          image_url TEXT,
+          scheduled_time TIMESTAMP WITH TIME ZONE,
+          posted BOOLEAN NOT NULL DEFAULT false,
+          facebook_post_id TEXT,
+          engagement_likes INTEGER DEFAULT 0,
+          engagement_comments INTEGER DEFAULT 0,
+          created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+        )
+      `);
+      console.log("✅ posts table ready");
+    } catch (e) {
+      console.log("⚠️ posts table:", e instanceof Error ? e.message : e);
+    }
     
-    // Create settings table
-    await client.queryObject(`
-      CREATE TABLE IF NOT EXISTS public.settings (
-        id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-        openai_api_key TEXT DEFAULT '',
-        facebook_page_id TEXT DEFAULT '',
-        facebook_page_access_token TEXT DEFAULT '',
-        auto_post_enabled BOOLEAN NOT NULL DEFAULT false,
-        max_posts_per_day INTEGER NOT NULL DEFAULT 3,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
-      )
-    `);
-    console.log("✅ settings table ready");
+    try {
+      // Create settings table
+      await client.queryObject(`
+        CREATE TABLE IF NOT EXISTS public.settings (
+          id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+          openai_api_key TEXT DEFAULT '',
+          facebook_page_id TEXT DEFAULT '',
+          facebook_page_access_token TEXT DEFAULT '',
+          auto_post_enabled BOOLEAN NOT NULL DEFAULT false,
+          max_posts_per_day INTEGER NOT NULL DEFAULT 3,
+          created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+          updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+        )
+      `);
+      console.log("✅ settings table ready");
+    } catch (e) {
+      console.log("⚠️ settings table:", e instanceof Error ? e.message : e);
+    }
     
-    // Insert default settings row if none exists
-    await client.queryObject(`
-      INSERT INTO public.settings (id) VALUES (gen_random_uuid()) ON CONFLICT DO NOTHING
-    `);
+    try {
+      // Insert default settings row if none exists
+      await client.queryObject(`
+        INSERT INTO public.settings (id) VALUES (gen_random_uuid()) ON CONFLICT DO NOTHING
+      `);
+      console.log("✅ Default settings row ensured");
+    } catch (e) {
+      console.log("⚠️ Default settings:", e instanceof Error ? e.message : e);
+    }
     
-    // Enable RLS and create policies
-    await client.queryObject(`ALTER TABLE public.trends ENABLE ROW LEVEL SECURITY`);
-    await client.queryObject(`ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY`);
-    await client.queryObject(`ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY`);
+    try {
+      // Enable RLS
+      await client.queryObject(`ALTER TABLE public.trends ENABLE ROW LEVEL SECURITY`);
+      await client.queryObject(`ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY`);
+      await client.queryObject(`ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY`);
+      console.log("✅ RLS enabled");
+    } catch (e) {
+      console.log("⚠️ RLS:", e instanceof Error ? e.message : e);
+    }
     
-    // Drop and recreate policies
-    await client.queryObject(`DROP POLICY IF EXISTS "Allow all on trends" ON public.trends`);
-    await client.queryObject(`DROP POLICY IF EXISTS "Allow all on posts" ON public.posts`);
-    await client.queryObject(`DROP POLICY IF EXISTS "Allow all on settings" ON public.settings`);
-    
-    await client.queryObject(`CREATE POLICY "Allow all on trends" ON public.trends FOR ALL USING (true) WITH CHECK (true)`);
-    await client.queryObject(`CREATE POLICY "Allow all on posts" ON public.posts FOR ALL USING (true) WITH CHECK (true)`);
-    await client.queryObject(`CREATE POLICY "Allow all on settings" ON public.settings FOR ALL USING (true) WITH CHECK (true)`);
-    console.log("✅ Policies created");
+    try {
+      // Create policies
+      await client.queryObject(`DROP POLICY IF EXISTS "Allow all on trends" ON public.trends`);
+      await client.queryObject(`DROP POLICY IF EXISTS "Allow all on posts" ON public.posts`);
+      await client.queryObject(`DROP POLICY IF EXISTS "Allow all on settings" ON public.settings`);
+      
+      await client.queryObject(`CREATE POLICY "Allow all on trends" ON public.trends FOR ALL USING (true) WITH CHECK (true)`);
+      await client.queryObject(`CREATE POLICY "Allow all on posts" ON public.posts FOR ALL USING (true) WITH CHECK (true)`);
+      await client.queryObject(`CREATE POLICY "Allow all on settings" ON public.settings FOR ALL USING (true) WITH CHECK (true)`);
+      console.log("✅ Policies created");
+    } catch (e) {
+      console.log("⚠️ Policies:", e instanceof Error ? e.message : e);
+    }
     
     // Get list of tables
     const result = await client.queryObject(
@@ -434,8 +460,7 @@ async function initializeDatabaseSchema() {
     
     await client.end();
   } catch (error) {
-    console.error("❌ Database initialization failed:", error);
-    throw error;
+    console.error("❌ Database initialization error:", error);
   }
 }
 
