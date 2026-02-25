@@ -54,7 +54,7 @@ async function handleTrendsList(req: Request): Promise<Response> {
   try {
     const client = await getConnection();
     const result = await client.queryObject("SELECT * FROM trends ORDER BY created_at DESC");
-    client.release();
+    await client.end();
     
     return new Response(JSON.stringify(result.rows), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -75,7 +75,7 @@ async function handleTrendsCreate(req: Request): Promise<Response> {
       "INSERT INTO trends (topic, source, used, created_at) VALUES ($1, $2, $3, NOW()) RETURNING *",
       [topic, "manual", false]
     );
-    client.release();
+    await client.end();
 
     return new Response(JSON.stringify(result.rows[0]), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -91,7 +91,7 @@ async function handlePostsList(req: Request): Promise<Response> {
   try {
     const client = await getConnection();
     const result = await client.queryObject("SELECT * FROM posts ORDER BY created_at DESC");
-    client.release();
+    await client.end();
     
     return new Response(JSON.stringify(result.rows), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -106,7 +106,7 @@ async function handlePostDelete(req: Request, postId: string): Promise<Response>
   try {
     const client = await getConnection();
     await client.queryObject("DELETE FROM posts WHERE id = $1", [postId]);
-    client.release();
+    await client.end();
     
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -144,7 +144,7 @@ async function handlePostUpdate(req: Request, postId: string): Promise<Response>
     values.push(postId);
     
     const result = await client.queryObject(query, values);
-    client.release();
+    await client.end();
     
     return new Response(JSON.stringify(result.rows[0]), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -159,7 +159,7 @@ async function handleSettingsGet(req: Request): Promise<Response> {
   try {
     const client = await getConnection();
     const result = await client.queryObject("SELECT * FROM settings LIMIT 1");
-    client.release();
+    await client.end();
     
     if (result.rows.length === 0) {
       return new Response(JSON.stringify({}), {
@@ -200,7 +200,7 @@ async function handleSettingsUpdate(req: Request): Promise<Response> {
     query += " RETURNING *";
     
     const result = await client.queryObject(query, values);
-    client.release();
+    await client.end();
     
     return new Response(JSON.stringify(result.rows[0]), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
