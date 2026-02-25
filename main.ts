@@ -26,8 +26,6 @@ async function getConnection() {
 
 
 async function handleTrendsList(req: Request): Promise<Response> {
-  if (req.method !== "GET") return new Response("Method not allowed", { status: 405 });
-  
   try {
     const client = await getConnection();
     const result = await client.queryObject("SELECT * FROM trends ORDER BY created_at DESC");
@@ -43,8 +41,6 @@ async function handleTrendsList(req: Request): Promise<Response> {
 }
 
 async function handleTrendsCreate(req: Request): Promise<Response> {
-  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
-  
   try {
     const { topic } = await req.json();
     if (!topic) return new Response(JSON.stringify({ error: "Missing topic" }), { status: 400, headers: corsHeaders });
@@ -67,8 +63,6 @@ async function handleTrendsCreate(req: Request): Promise<Response> {
 }
 
 async function handlePostsList(req: Request): Promise<Response> {
-  if (req.method !== "GET") return new Response("Method not allowed", { status: 405 });
-  
   try {
     const client = await getConnection();
     const result = await client.queryObject("SELECT * FROM posts ORDER BY created_at DESC");
@@ -84,8 +78,6 @@ async function handlePostsList(req: Request): Promise<Response> {
 }
 
 async function handlePostDelete(req: Request, postId: string): Promise<Response> {
-  if (req.method !== "DELETE") return new Response("Method not allowed", { status: 405 });
-  
   try {
     const client = await getConnection();
     await client.queryObject("DELETE FROM posts WHERE id = $1", [postId]);
@@ -101,8 +93,6 @@ async function handlePostDelete(req: Request, postId: string): Promise<Response>
 }
 
 async function handlePostUpdate(req: Request, postId: string): Promise<Response> {
-  if (req.method !== "PATCH") return new Response("Method not allowed", { status: 405 });
-  
   try {
     const body = await req.json();
     const { content, scheduled_time } = body;
@@ -141,8 +131,6 @@ async function handlePostUpdate(req: Request, postId: string): Promise<Response>
 }
 
 async function handleSettingsGet(req: Request): Promise<Response> {
-  if (req.method !== "GET") return new Response("Method not allowed", { status: 405 });
-  
   try {
     const client = await getConnection();
     const result = await client.queryObject("SELECT * FROM settings LIMIT 1");
@@ -164,8 +152,6 @@ async function handleSettingsGet(req: Request): Promise<Response> {
 }
 
 async function handleSettingsUpdate(req: Request): Promise<Response> {
-  if (req.method !== "PATCH") return new Response("Method not allowed", { status: 405 });
-  
   try {
     const body = await req.json();
     const client = await getConnection();
@@ -201,8 +187,6 @@ async function handleSettingsUpdate(req: Request): Promise<Response> {
 }
 
 async function handleGeneratePost(req: Request): Promise<Response> {
-  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
-  
   try {
     const { trendId, topic } = await req.json();
     if (!trendId || !topic) {
@@ -234,8 +218,6 @@ async function handleGeneratePost(req: Request): Promise<Response> {
 }
 
 async function handleGenerateTrends(req: Request): Promise<Response> {
-  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
-  
   try {
     const deploymentUrl = Deno.env.get("DENO_DEPLOYMENT_ID") 
       ? `https://${Deno.env.get("DENO_DEPLOYMENT_ID")}.deno.dev`
@@ -259,8 +241,6 @@ async function handleGenerateTrends(req: Request): Promise<Response> {
 }
 
 async function handlePostToFacebook(req: Request): Promise<Response> {
-  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
-  
   try {
     const { postId } = await req.json();
     if (!postId) {
@@ -290,8 +270,6 @@ async function handlePostToFacebook(req: Request): Promise<Response> {
 }
 
 async function handleFetchEngagement(req: Request): Promise<Response> {
-  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
-  
   try {
     const { postId, facebookPostId } = await req.json();
     if (!postId || !facebookPostId) {
@@ -321,8 +299,6 @@ async function handleFetchEngagement(req: Request): Promise<Response> {
 }
 
 async function handleTestConnection(req: Request): Promise<Response> {
-  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
-  
   try {
     const { pageId, accessToken } = await req.json();
     if (!pageId || !accessToken) {
@@ -375,10 +351,33 @@ serve(async (req) => {
     });
   }
 
+  // Debug endpoint to test routing
+  if (path === "/debug") {
+    return new Response(JSON.stringify({
+      path,
+      method,
+      dbUrl: Deno.env.get("DATABASE_URL") ? "SET" : "NOT SET",
+      timestamp: new Date().toISOString(),
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   // API Routes - handle these FIRST before static files
   try {
-    if (path === "/api/trends" && method === "GET") return await handleTrendsList(req);
-    if (path === "/api/trends" && method === "POST") return await handleTrendsCreate(req);
+    // Debug logging
+    if (path.startsWith("/api/")) {
+      console.log(`API route check: path="${path}", method="${method}"`);
+    }
+    
+    if (path === "/api/trends" && method === "GET") {
+      console.log("Matched GET /api/trends");
+      return await handleTrendsList(req);
+    }
+    if (path === "/api/trends" && method === "POST") {
+      console.log("Matched POST /api/trends");
+      return await handleTrendsCreate(req);
+    }
     if (path === "/api/posts" && method === "GET") return await handlePostsList(req);
     if (path.startsWith("/api/posts/") && method === "DELETE") {
       const postId = path.split("/")[3];
