@@ -110,9 +110,22 @@ export default function PostsPage() {
                 <TableRow key={p.id}>
                   <TableCell>
                     {p.image_url ? (
-                      <img src={p.image_url} alt="Post" className="w-12 h-12 rounded object-cover" />
+                      <img 
+                        src={p.image_url} 
+                        alt="Post" 
+                        className="w-16 h-16 rounded object-cover cursor-pointer hover:opacity-80 transition"
+                        onClick={() => {
+                          const img = new Image();
+                          img.src = p.image_url;
+                          const w = window.open("");
+                          if (w) {
+                            w.document.write(`<html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#000"><img src="${p.image_url}" style="max-width:100%;max-height:100%"/></body></html>`);
+                          }
+                        }}
+                        title="Click to view full size"
+                      />
                     ) : (
-                      <div className="w-12 h-12 rounded bg-muted" />
+                      <div className="w-16 h-16 rounded bg-muted flex items-center justify-center text-xs text-muted-foreground">No image</div>
                     )}
                   </TableCell>
                   <TableCell className="max-w-xs">
