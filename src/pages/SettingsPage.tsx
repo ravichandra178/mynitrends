@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { fetchSettings, updateSettings } from "@/lib/supabase-helpers";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
+
+const API_BASE = (import.meta as any).env?.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
@@ -49,10 +50,13 @@ export default function SettingsPage() {
     }
     setTesting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("test-connection", {
-        body: { pageId: form.facebook_page_id, accessToken: form.facebook_page_access_token },
+      const response = await fetch(`${API_BASE}/api/test-connection`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pageId: form.facebook_page_id, accessToken: form.facebook_page_access_token }),
       });
-      if (error) throw error;
+      if (!response.ok) throw new Error('Connection test failed');
+      const data = await response.json();
       if (data?.success) {
         toast.success(`Connected to: ${data.pageName}`);
       } else {

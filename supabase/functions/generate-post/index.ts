@@ -1,10 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Pool } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+const pool = new Pool(Deno.env.get("DATABASE_URL")!, { max: 3 });
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -13,11 +15,8 @@ serve(async (req) => {
     const { trendId, topic } = await req.json();
     if (!trendId || !topic) throw new Error("Missing trendId or topic");
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const groqApiKey = Deno.env.get("GROQ_API_KEY")!;
     const huggingFaceApiKey = Deno.env.get("HUGGINGFACE_API_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Step 1: Generate post content via AI
     const contentRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -52,8 +51,8 @@ Rules:
     const postContent = contentData.choices?.[0]?.message?.content?.trim();
     if (!postContent) throw new Error("Empty content from AI");
 
-    // Step 2: Generate image via Hugging Face
-    let imageUrl = null;
+    // Step 2: Generate image via Hugging Face (optional - store as URL string if successful)
+    let imageUrl: string | null = null;
     try {
       const imagePrompt = `Facebook post image about ${topic}. Social media style, vibrant colors, modern design, engaging visual. Text: "${postContent.split("\n")[0]}"`;
       
@@ -77,19 +76,10 @@ Rules:
 
       if (imageRes.ok) {
         const imageBlob = await imageRes.blob();
-        const fileName = `post-${trendId}-${Date.now()}.png`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("post-images")
-          .upload(fileName, imageBlob, { contentType: "image/png" });
-
-        if (!uploadError) {
-          const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(fileName);
-          imageUrl = urlData.publicUrl;
-          console.log("Image generated and uploaded successfully");
-        } else {
-          console.error("Upload error:", uploadError);
-        }
+        const arrayBuffer = await imageBlob.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        imageUrl = `data:image/png;base64,${base64}`;
+        console.log("Image generated successfully");
       } else {
         const err = await imageRes.text();
         console.error("Image generation error:", err);
@@ -99,25 +89,33 @@ Rules:
       // Continue without image if generation fails
     }
 
-    // Step 3: Insert post
-    const scheduledTime = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour from now
-    const { error: insertError } = await supabase.from("posts").insert({
-      trend_id: trendId,
-      content: postContent,
-      image_url: imageUrl,
-      scheduled_time: scheduledTime,
-    });
-    if (insertError) throw insertError;
+    // Step 3: Insert post into Neon database
+    const client = await pool.connect();
+    try {
+      const scheduledTime = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour from now
+      
+      const result = await client.queryObject(
+        `INSERT INTO posts (trend_id, content, image_url, scheduled_time, created_at)
+         VALUES ($1, $2, $3, $4, NOW()) RETURNING id`,
+        [trendId, postContent, imageUrl, scheduledTime]
+      );
 
-    // Step 4: Mark trend as used
-    await supabase.from("trends").update({ used: true }).eq("id", trendId);
+      // Step 4: Mark trend as used
+      await client.queryObject(
+        "UPDATE trends SET used = true WHERE id = $1",
+        [trendId]
+      );
+    } finally {
+      client.release();
+    }
 
     return new Response(JSON.stringify({ success: true, content: postContent, imageUrl }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
     console.error("generate-post error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

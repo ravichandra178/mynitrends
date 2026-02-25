@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fetchPosts, deletePost, updatePostContent, updatePostSchedule } from "@/lib/supabase-helpers";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Send, Trash2, RefreshCw, Loader2, ThumbsUp, MessageSquare } from "lucide-react";
 import { format } from "date-fns";
+
+const API_BASE = (import.meta as any).env?.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 export default function PostsPage() {
   const queryClient = useQueryClient();
@@ -31,8 +32,12 @@ export default function PostsPage() {
   const handlePostNow = async (postId: string) => {
     setPostingId(postId);
     try {
-      const { error } = await supabase.functions.invoke("post-to-facebook", { body: { postId } });
-      if (error) throw error;
+      const response = await fetch(`${API_BASE}/api/post-to-facebook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId }),
+      });
+      if (!response.ok) throw new Error('Failed to publish');
       toast.success("Published to Facebook!");
       queryClient.invalidateQueries({ queryKey: ["posts"] });
     } catch (e: any) {
@@ -45,8 +50,12 @@ export default function PostsPage() {
   const handleRefreshEngagement = async (postId: string, fbPostId: string) => {
     setRefreshingId(postId);
     try {
-      const { error } = await supabase.functions.invoke("fetch-engagement", { body: { postId, facebookPostId: fbPostId } });
-      if (error) throw error;
+      const response = await fetch(`${API_BASE}/api/fetch-engagement`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId, facebookPostId: fbPostId }),
+      });
+      if (!response.ok) throw new Error('Failed to fetch engagement');
       toast.success("Engagement refreshed");
       queryClient.invalidateQueries({ queryKey: ["posts"] });
     } catch (e: any) {

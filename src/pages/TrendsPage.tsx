@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fetchTrends, addTrend } from "@/lib/supabase-helpers";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Sparkles, Loader2, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
+
+const API_BASE = (import.meta as any).env?.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 export default function TrendsPage() {
   const [newTopic, setNewTopic] = useState("");
@@ -36,10 +37,12 @@ export default function TrendsPage() {
   const handleGenerate = async (trendId: string, topic: string) => {
     setGeneratingId(trendId);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-post", {
-        body: { trendId, topic },
+      const response = await fetch(`${API_BASE}/api/generate-post`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trendId, topic }),
       });
-      if (error) throw error;
+      if (!response.ok) throw new Error('Failed to generate post');
       toast.success("Post generated successfully");
       queryClient.invalidateQueries({ queryKey: ["trends"] });
       queryClient.invalidateQueries({ queryKey: ["posts"] });
@@ -53,8 +56,12 @@ export default function TrendsPage() {
   const handleFetchTrends = async () => {
     setFetchingTrends(true);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-trends");
-      if (error) throw error;
+      const response = await fetch(`${API_BASE}/api/generate-trends`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) throw new Error('Failed to fetch trends');
+      const data = await response.json();
       if (data?.added > 0) {
         toast.success(`Added ${data.added} trending topics`);
         queryClient.invalidateQueries({ queryKey: ["trends"] });

@@ -11,12 +11,7 @@ const FLOW_STEPS = ["Trend Detected", "Post Generated", "Image Generated", "Sche
 
 export default function ReviewPage() {
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
-  const { data: posts = [] } = useQuery({ queryKey: ["posts"], queryFn: async () => {
-    const { data, error } = await (await import("@/integrations/supabase/client")).supabase
-      .from("posts").select("*").order("created_at", { ascending: false });
-    if (error) throw error;
-    return data ?? [];
-  }});
+  const { data: posts = [] } = useQuery({ queryKey: ["posts"], queryFn: fetchPosts });
 
   const publishedPosts = posts.filter((p: any) => p.posted);
   const lastPublished = publishedPosts[0];
