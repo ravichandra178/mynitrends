@@ -38,9 +38,9 @@ function getDatabaseUrl(): string {
 
 async function getConnection() {
   const dbUrl = getDatabaseUrl();
-  const client = new Client({
-    connectionString: dbUrl,
-  });
+  console.log(`Final DB URL pathname check - has database: ${new URL(dbUrl).pathname}`);
+  
+  const client = new Client(dbUrl); // Pass URL string directly, not as property
   await client.connect();
   return client;
 }
