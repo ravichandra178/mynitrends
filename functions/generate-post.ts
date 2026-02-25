@@ -6,24 +6,32 @@ export async function generatePost(dbUrl: string, hfApiKey: string, trendId: str
   }
 
   // Call Hugging Face API with Qwen3-32B
-  const hfRes = await fetch("https://api-inference.huggingface.co/models/Qwen/Qwen3-32B-Instruct", {
+  const hfRes = await fetch("https://router.huggingface.co/v1/chat/completions", {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${hfApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      inputs: `You are a social media copywriter. Generate a compelling social media post about: "${topic}". 
+      model: "Qwen/Qwen3-32B-Instruct",
+      messages: [
+        {
+          role: "system",
+          content: `You are a social media copywriter. Generate a compelling social media post.
 Rules:
 - Keep under 280 characters
 - Engaging and shareable
 - Include call-to-action
 - Add 3-5 relevant hashtags
-Return only the post text.`,
-      parameters: {
-        max_new_tokens: 200,
-        temperature: 0.8,
-      },
+Return ONLY the post text, nothing else.`
+        },
+        {
+          role: "user",
+          content: `Generate a social media post about: "${topic}"`
+        }
+      ],
+      max_tokens: 200,
+      temperature: 0.8,
     }),
   });
 
@@ -35,8 +43,10 @@ Return only the post text.`,
   const hfData = await hfRes.json();
   let content = "";
   
-  // Handle different response formats from HF
-  if (Array.isArray(hfData)) {
+  // Handle OpenAI-compatible response format
+  if (hfData.choices && Array.isArray(hfData.choices) && hfData.choices[0]) {
+    content = hfData.choices[0].message?.content || hfData.choices[0].text || "";
+  } else if (Array.isArray(hfData)) {
     content = hfData[0]?.generated_text || hfData[0]?.text || String(hfData[0]);
   } else if (hfData.generated_text) {
     content = hfData.generated_text;

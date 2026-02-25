@@ -17,20 +17,25 @@ export async function generateTrends(dbUrl: string, groqApiKey: string): Promise
       messages: [
         {
           role: "system",
-          content: `You are a social media trend analyst. Identify current trending topics relevant to social media marketing.
-Return ONLY a valid JSON array of trend objects with this exact structure:
+          content: `You are a social media trend analyst. Your task is to identify 5 current trending topics for social media content creators.
+
+CRITICAL: Return ONLY a valid JSON array. Do not include any markdown, code blocks, thinking, or text outside the JSON array.
+
+Example format:
 [
-  {"topic": "Trend Topic", "source": "Source Name"},
-  ...
-]
-Do not include markdown, code blocks, or any text outside the JSON array.`
+  {"topic": "AI Content Tools", "source": "TikTok"},
+  {"topic": "Short Form Video", "source": "YouTube Shorts"},
+  {"topic": "Community Building", "source": "Instagram"},
+  {"topic": "Authenticity & Transparency", "source": "Twitter/X"},
+  {"topic": "Interactive Storytelling", "source": "TikTok"}
+]`
         },
         {
           role: "user",
-          content: "Generate 5 current social media trends for content creators."
+          content: "Generate ONLY a JSON array with 5 current social media trends. No thinking, no explanation, just the JSON array."
         }
       ],
-      max_tokens: 300,
+      max_tokens: 500,
       temperature: 0.7,
     }),
   });
@@ -43,38 +48,35 @@ Do not include markdown, code blocks, or any text outside the JSON array.`
   const groqData = await groqRes.json();
   const response = groqData.choices[0].message.content;
   
-  // Parse JSON response - handle various formats
+  // Parse JSON response - must be valid JSON
   let trends: any[] = [];
   
   try {
     // First try direct JSON parse
     trends = JSON.parse(response);
-  } catch (_e1) {
-    // Try to extract JSON array from response
-    const jsonMatch = response.match(/\[[\s\S]*\]/);
+    if (!Array.isArray(trends)) {
+      throw new Error("Response is not an array");
+    }
+  } catch (e) {
+    console.error("Primary JSON parse failed:", e);
+    
+    // Try to extract JSON array from response (in case of extra text)
+    const jsonMatch = response.match(/\[\s*\{[\s\S]*?\}\s*\]/);
     if (jsonMatch) {
       try {
         trends = JSON.parse(jsonMatch[0]);
-      } catch (_e2) {
-        // If still failing, create default trends
-        console.error("Failed to parse trends JSON:", response);
-        trends = [
-          { topic: "AI & Automation", source: "general" },
-          { topic: "Short-form Video", source: "general" },
-          { topic: "Influencer Marketing", source: "general" },
-          { topic: "User-Generated Content", source: "general" },
-          { topic: "Social Commerce", source: "general" }
-        ];
+        if (!Array.isArray(trends)) {
+          throw new Error("Extracted response is not an array");
+        }
+        console.log("Successfully extracted JSON from response");
+      } catch (e2) {
+        console.error("Failed to parse extracted JSON:", e2);
+        console.error("Raw response:", response.substring(0, 500));
+        throw new Error(`Could not parse JSON from GROQ response: ${String(e2)}`);
       }
     } else {
-      console.error("No JSON array found in response:", response);
-      trends = [
-        { topic: "AI & Automation", source: "general" },
-        { topic: "Short-form Video", source: "general" },
-        { topic: "Influencer Marketing", source: "general" },
-        { topic: "User-Generated Content", source: "general" },
-        { topic: "Social Commerce", source: "general" }
-      ];
+      console.error("No JSON array found in response. Raw response:", response.substring(0, 500));
+      throw new Error("No valid JSON array found in GROQ response");
     }
   }
 
