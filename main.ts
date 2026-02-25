@@ -1,6 +1,6 @@
 /// <reference lib="deno.window" />
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { Pool } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
+import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,18 +8,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
 };
 
-// Database pool initialization - deferred until first use
-let pool: Pool | null = null;
-
-function initializePool(): Pool {
-  if (pool) return pool;
-
+// Get DATABASE_URL with proper formatting
+function getDatabaseUrl(): string {
   let dbUrl = Deno.env.get("DATABASE_URL");
-  console.log(`Initializing database with URL: ${dbUrl ? "***" : "NOT SET"}`);
+  console.log(`Database URL: ${dbUrl ? "***" : "NOT SET"}`);
 
   if (!dbUrl) {
-    console.error("ERROR: DATABASE_URL environment variable is not set!");
-    throw new Error("DATABASE_URL is required");
+    throw new Error("DATABASE_URL environment variable is not set!");
   }
 
   // Parse URL to check if database name is present
@@ -39,15 +34,16 @@ function initializePool(): Pool {
     throw new Error(`Invalid DATABASE_URL format: ${e}`);
   }
 
-  pool = new Pool(dbUrl, {
-    max: 3,
-  });
-  return pool;
+  return dbUrl;
 }
 
 async function getConnection() {
-  const p = initializePool();
-  return await p.connect();
+  const dbUrl = getDatabaseUrl();
+  const client = new Client({
+    connectionString: dbUrl,
+  });
+  await client.connect();
+  return client;
 }
 
 
