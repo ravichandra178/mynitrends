@@ -33,19 +33,15 @@ async function fetchTrendsFromRSS(): Promise<string[]> {
 }
 
 async function generateTrendsWithAI(): Promise<string[]> {
-  const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-  if (!lovableApiKey) {
-    console.log("[TRENDS] No LOVABLE_API_KEY, skipping AI generation");
-    return [];
-  }
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
   try {
-    console.log("[TRENDS] 🟠 Generating trends with Lovable AI...");
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const res = await fetch(`${supabaseUrl}/functions/v1/ai-proxy`, {
+    console.log("[TRENDS] 🟠 Generating trends with AI...");
+    const res = await fetch(`${supabaseUrl}/functions/v1/ai`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${lovableApiKey}`,
+        Authorization: `Bearer ${supabaseKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
