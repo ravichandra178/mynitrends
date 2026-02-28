@@ -20,7 +20,9 @@ export default function TrendsPage() {
   const [fetchingTrends, setFetchingTrends] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: trends = [], isLoading } = useQuery({ queryKey: ["trends"], queryFn: fetchTrends });
+  const { data: trends = [], isLoading, error } = useQuery({ queryKey: ["trends"], queryFn: fetchTrends });
+
+  console.log("[TrendsPage] trends:", trends, "loading:", isLoading, "error:", error);
 
   const addMutation = useMutation({
     mutationFn: addTrend,
