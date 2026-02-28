@@ -35,8 +35,34 @@ Just the post text.`,
   });
 
   if (!hfTextRes.ok) {
-    const error = await hfTextRes.text();
-    throw new Error(`Hugging Face text generation error: ${error}`);
+    let errorMessage = `Hugging Face text generation error: HTTP ${hfTextRes.status}`;
+    let isTokenExpired = false;
+    
+    try {
+      const errorData = await hfTextRes.json();
+      const errorText = errorData.error || `HTTP ${hfTextRes.status}`;
+      errorMessage = `Hugging Face text generation error: ${errorText}`;
+      
+      // Check for token expiration indicators
+      if (errorData.error && (
+        errorData.error.toLowerCase().includes('token') && 
+        (errorData.error.toLowerCase().includes('expired') || 
+         errorData.error.toLowerCase().includes('invalid') ||
+         errorData.error.toLowerCase().includes('unauthorized'))
+      )) {
+        isTokenExpired = true;
+        console.error(`[HF TOKEN EXPIRED] Hugging Face API token appears to be expired or invalid during post generation: ${errorData.error}`);
+      }
+    } catch (e) {
+      const errorText = await hfTextRes.text();
+      errorMessage = `Hugging Face text generation error: ${errorText}`;
+    }
+    
+    if (isTokenExpired) {
+      errorMessage += ". Please check your HUGGINGFACE_API_KEY environment variable.";
+    }
+    
+    throw new Error(errorMessage);
   }
 
   const hfTextData = await hfTextRes.json();

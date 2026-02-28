@@ -233,7 +233,7 @@ async function handleGeneratePost(req: Request): Promise<Response> {
 
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
     const dbUrl = getDatabaseUrl();
-    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "Mistral-7B-Instruct-v0.2").trim();
+    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "distilgpt2").trim();
     const hfModel = (Deno.env.get("HF_MODEL") || "deepgenteam/DeepGen-1.0").trim();
     
     console.log("Generate post request - Text model:", hfTextModel, "Image model:", hfModel);
@@ -431,10 +431,27 @@ async function handleTestFacebookConnection(req: Request): Promise<Response> {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      let errorMessage = `HTTP ${response.status}`;
+      try {
+        const errorData = await response.json();
+        const fbError = errorData.error?.message || errorData.error_description || errorMessage;
+        
+        // Provide helpful guidance for common Facebook errors
+        if (fbError.includes("session is invalid") || fbError.includes("access token")) {
+          errorMessage = `${fbError}. Please generate a new Page Access Token from Facebook Developer Console.`;
+        } else if (fbError.includes("permissions")) {
+          errorMessage = `${fbError}. Please ensure your app has the required permissions (pages_manage_posts, pages_read_engagement).`;
+        } else {
+          errorMessage = fbError;
+        }
+      } catch (e) {
+        // If response is not JSON, use status text
+        errorMessage = response.statusText || errorMessage;
+      }
+      
       return new Response(JSON.stringify({ 
         success: false, 
-        error: error.error?.message || `HTTP ${response.status}`,
+        error: errorMessage,
         provider: "Facebook"
       }), { status: 200, headers: corsHeaders });
     }
@@ -522,7 +539,7 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
   try {
     const { model } = await req.json();
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
-    const hfModel = model || Deno.env.get("HF_TEXT_MODEL") || "distilgpt2";
+    const hfModel = model || Deno.env.get("HF_TEXT_MODEL") || "gpt2";
 
     if (!hfApiKey) {
       return new Response(JSON.stringify({ 
@@ -553,19 +570,37 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
 
     if (!response.ok) {
       let errorMessage = `HTTP ${response.status}`;
+      let isTokenExpired = false;
+      
       try {
         const errorData = await response.json();
         errorMessage = errorData.error || errorMessage;
+        
+        // Check for token expiration indicators
+        if (errorData.error && (
+          errorData.error.toLowerCase().includes('token') && 
+          (errorData.error.toLowerCase().includes('expired') || 
+           errorData.error.toLowerCase().includes('invalid') ||
+           errorData.error.toLowerCase().includes('unauthorized'))
+        )) {
+          isTokenExpired = true;
+          console.error(`[HF TOKEN EXPIRED] Hugging Face API token appears to be expired or invalid: ${errorData.error}`);
+        }
       } catch (e) {
         // If response is not JSON, use status text
         errorMessage = response.statusText || errorMessage;
+      }
+      
+      if (isTokenExpired) {
+        errorMessage += ". Please check your HUGGINGFACE_API_KEY environment variable.";
       }
       
       return new Response(JSON.stringify({ 
         success: false, 
         error: errorMessage,
         model: hfModel,
-        provider: "Hugging Face"
+        provider: "Hugging Face",
+        tokenExpired: isTokenExpired
       }), { status: 200, headers: corsHeaders });
     }
 
