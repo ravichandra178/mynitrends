@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { fetchSettings, updateSettings, testConnection, testGROQ, testHuggingFace, testRSS } from "@/lib/api-helpers";
+import { toast } from "sonner";
 
 // Import API_BASE for direct API calls
 const API_BASE = '';
@@ -21,7 +22,7 @@ export default function SettingsPage() {
     facebook_page_access_token: "",
     auto_post_enabled: false,
     max_posts_per_day: 3,
-    groq_model: "llama3-8b-8192",
+    groq_model: "llama-3.1-8b-instant",
     hf_model: "microsoft/DialoGPT-medium",
   });
   const [testing, setTesting] = useState(false);
@@ -179,7 +180,7 @@ export default function SettingsPage() {
                 id="groq_model"
                 value={form.groq_model}
                 onChange={(e) => setForm({ ...form, groq_model: e.target.value })}
-                placeholder="llama3-8b-8192"
+                placeholder="llama-3.1-8b-instant"
               />
             </div>
 
