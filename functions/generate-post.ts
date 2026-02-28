@@ -13,7 +13,7 @@ export async function generatePost(
   const hfModel = (Deno.env.get("HF_MODEL") || "deepgenteam/DeepGen-1.0").trim();
 
   // Generate post text using Hugging Face
-  const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2").trim();
+  const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "microsoft/DialoGPT-medium").trim();
   const hfTextRes = await fetch("https://router.huggingface.co/v1/chat/completions", {
     method: "POST",
     headers: {

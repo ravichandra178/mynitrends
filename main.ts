@@ -233,7 +233,7 @@ async function handleGeneratePost(req: Request): Promise<Response> {
 
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
     const dbUrl = getDatabaseUrl();
-    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2").trim();
+    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "microsoft/DialoGPT-medium").trim();
     const hfModel = (Deno.env.get("HF_MODEL") || "deepgenteam/DeepGen-1.0").trim();
     
     console.log("Generate post request - Text model:", hfTextModel, "Image model:", hfModel);
