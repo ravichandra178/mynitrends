@@ -261,5 +261,11 @@ Return ONLY valid JSON array, nothing else.`
     await client.end();
   }
 
-  return savedTrends;
+  return {
+    trends: savedTrends,
+    source: appliedMethod,
+    model: usedModel,
+    count: savedTrends.length,
+    timestamp: new Date().toISOString()
+  };
 }

@@ -277,7 +277,18 @@ async function handleGenerateTrends(req: Request): Promise<Response> {
       console.log(`   [${i + 1}] ${t.topic} (source: ${t.source})`);
     });
 
-    return new Response(JSON.stringify(trends), {
+    // Return trends with metadata
+    const responseData = {
+      trends: trends.trends,
+      added: trends.count,
+      source: trends.source,
+      model: trends.model,
+      topics: trends.trends.map((t: any) => t.topic),
+      duration: duration,
+      timestamp: trends.timestamp
+    };
+
+    return new Response(JSON.stringify(responseData), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 201,
     });

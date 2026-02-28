@@ -207,12 +207,8 @@ export async function generateTrends() {
   try {
     const startTime = performance.now();
     
-    // Get GROQ model from environment variable
-    const groqModel = Deno.env.get("GROQ_MODEL") || "qwen-3-32b";
-    
     // Log AI attempt details
     console.log("%c[TRENDS LOG] 🤖 AI Trend Generation Attempt:", "color: purple; font-weight: bold;");
-    console.log(`%c[TRENDS LOG]   Model: GROQ (${groqModel})`, "color: gray;");
     console.log(`%c[TRENDS LOG]   Source: API Endpoint`, "color: gray;");
     console.log("%c[TRENDS LOG] ⏳ Waiting for AI response...", "color: orange;");
     
@@ -231,12 +227,12 @@ export async function generateTrends() {
     // Log success with source information
     if (data?.source === "groq" || data?.source === "hf") {
       console.log(`%c[TRENDS LOG] ✅ AI SUCCESS: Generated ${data?.added || 0} trends`, "color: green; font-weight: bold;");
-      console.log(`%c[TRENDS LOG]   Source: ${data.source.toUpperCase()}`, "color: green;");
+      console.log(`%c[TRENDS LOG]   Method: ${data.source.toUpperCase()} (${data?.model || 'unknown model'})`, "color: green;");
       console.log(`%c[TRENDS LOG]   Duration: ${duration}ms`, "color: green;");
       console.log(`%c[TRENDS LOG]   Topics: ${data?.topics?.join(", ") || "N/A"}`, "color: green;");
     } else if (data?.source === "rss") {
       console.log(`%c[TRENDS LOG] 📡 RSS FALLBACK: Fetched ${data?.added || 0} trends from Google Trends feed`, "color: orange; font-weight: bold;");
-      console.log(`%c[TRENDS LOG]   Source: Google Trends RSS`, "color: orange;");
+      console.log(`%c[TRENDS LOG]   Method: Google Trends RSS (${data?.model || 'RSS feed'})`, "color: orange;");
       console.log(`%c[TRENDS LOG]   Duration: ${duration}ms`, "color: orange;");
       console.log(`%c[TRENDS LOG]   Topics: ${data?.topics?.join(", ") || "N/A"}`, "color: orange;");
     }
