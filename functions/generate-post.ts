@@ -13,24 +13,26 @@ export async function generatePost(
   const hfModel = (Deno.env.get("HF_MODEL") || "deepgenteam/DeepGen-1.0").trim();
 
   // Generate post text using Hugging Face
-  const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "distilgpt2").trim();
-  const hfTextRes = await fetch(`https://router.huggingface.co/hf-inference/models/${hfTextModel}`, {
+  const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "meta-llama/Meta-Llama-3-8B-Instruct").trim();
+  const hfTextRes = await fetch(`https://router.huggingface.co/hf-inference/models/${hfTextModel}/chat/completions`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${hfApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      inputs: `Write ONLY a professional Facebook post about "${topic}". 
+      messages: [
+        {
+          role: "user",
+          content: `Write ONLY a professional Facebook post about "${topic}". 
 Keep it 150-200 characters. 
 No hashtags. 
 No explanations.
-Just the post text.`,
-      parameters: {
-        max_new_tokens: 100,
-        temperature: 0.7,
-        do_sample: true,
-      },
+Just the post text.`
+        }
+      ],
+      max_tokens: 100,
+      temperature: 0.7,
     }),
   });
 
@@ -66,21 +68,7 @@ Just the post text.`,
   }
 
   const hfTextData = await hfTextRes.json();
-  let postText = "";
-
-  // Handle different response formats
-  if (Array.isArray(hfTextData) && hfTextData[0]?.generated_text) {
-    postText = hfTextData[0].generated_text.replace(`Write ONLY a professional Facebook post about "${topic}". 
-Keep it 150-200 characters. 
-No hashtags. 
-No explanations.
-Just the post text.`, "").trim();
-  } else if (hfTextData.generated_text) {
-    postText = hfTextData.generated_text.trim();
-  } else {
-    // Fallback for unexpected format
-    postText = `Check out our latest insights on ${topic}! 🚀 Stay tuned for more updates.`;
-  }
+  let postText = hfTextData.choices?.[0]?.message?.content?.trim();
 
   // Fallback if no content
   if (!postText || postText.length === 0) {

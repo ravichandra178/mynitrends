@@ -539,7 +539,7 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
   try {
     const { model } = await req.json();
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
-    const hfModel = model || Deno.env.get("HF_TEXT_MODEL") || "gpt2";
+    const hfModel = model || Deno.env.get("HF_TEXT_MODEL") || "meta-llama/Meta-Llama-3-8B-Instruct";
 
     if (!hfApiKey) {
       return new Response(JSON.stringify({ 
@@ -552,19 +552,16 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
 
     console.log(`[TEST] Testing Hugging Face API with model: ${hfModel}`);
 
-    const response = await fetch(`https://router.huggingface.co/hf-inference/models/${hfModel}`, {
+    const response = await fetch(`https://router.huggingface.co/hf-inference/models/${hfModel}/chat/completions`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${hfApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        inputs: "Say 'Hello from Hugging Face!' in exactly 4 words.",
-        parameters: {
-          max_new_tokens: 50,
-          temperature: 0.4,
-          do_sample: false,
-        },
+        messages: [{"role": "user", "content": "What is the capital of France?"}],
+        max_tokens: 50,
+        temperature: 0.4,
       }),
     });
 
@@ -605,13 +602,7 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
     }
 
     const data = await response.json();
-    let message = "";
-
-    if (Array.isArray(data) && data[0]?.generated_text) {
-      message = data[0].generated_text.replace("Say 'Hello from Hugging Face!' in exactly 4 words.", "").trim();
-    } else if (data.generated_text) {
-      message = data.generated_text.trim();
-    }
+    const message = data.choices?.[0]?.message?.content?.trim();
 
     return new Response(JSON.stringify({ 
       success: true, 
