@@ -15,7 +15,6 @@ export default function SettingsPage() {
   const { data: settings, isLoading } = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
 
   const [form, setForm] = useState({
-    openai_api_key: "",
     facebook_page_id: "",
     facebook_page_access_token: "",
     auto_post_enabled: false,
@@ -26,7 +25,6 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings) {
       setForm({
-        openai_api_key: settings.openai_api_key ?? "",
         facebook_page_id: settings.facebook_page_id ?? "",
         facebook_page_access_token: settings.facebook_page_access_token ?? "",
         auto_post_enabled: settings.auto_post_enabled ?? false,
@@ -63,20 +61,6 @@ export default function SettingsPage() {
     <Layout>
       <PageHeader title="Settings" description="Configure API keys and automation preferences" />
       <div className="max-w-lg space-y-6">
-        <div className="space-y-4 border rounded-lg p-4">
-          <h3 className="text-sm font-medium">OpenAI Configuration</h3>
-          <div className="space-y-2">
-            <Label htmlFor="openai_key">API Key</Label>
-            <Input
-              id="openai_key"
-              type="password"
-              value={form.openai_api_key}
-              onChange={(e) => setForm({ ...form, openai_api_key: e.target.value })}
-              placeholder="sk-..."
-            />
-          </div>
-        </div>
-
         <div className="space-y-4 border rounded-lg p-4">
           <h3 className="text-sm font-medium">Facebook Configuration</h3>
           <div className="space-y-2">

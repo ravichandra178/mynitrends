@@ -57,35 +57,49 @@ Just the post text.`
     primaryModel,
     "runwayml/stable-diffusion-v1-5",
     "stabilityai/stable-diffusion-xl-base-1.0",
+    "CompVis/stable-diffusion-v1-4",
   ];
+  
+  console.log(`[IMAGE] Starting image generation for topic: "${topic}"`);
   
   for (const model of imageModels) {
     try {
-      console.log(`[IMAGE] Trying: ${model}`);
-      const imagePrompt = `Professional social media image for #${topic}. Modern, engaging, trendy design. High quality.`;
+      console.log(`[IMAGE] Trying model: ${model}`);
+      const imagePrompt = `Professional social media image for "${topic}". Modern, engaging, trendy design. High quality, clean background.`;
       
       const hfImageRes = await fetch(
-        "https://api-inference.huggingface.co/models/" + model,
+        `https://api-inference.huggingface.co/models/${model}`,
         {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${hfApiKey}`,
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             inputs: imagePrompt,
+            options: {
+              wait_for_model: true,
+              use_cache: false,
+            },
           }),
-          signal: AbortSignal.timeout(45000)
+          signal: AbortSignal.timeout(60000) // Increased timeout
         }
       );
 
       if (hfImageRes.ok) {
-        const imageBuffer = await hfImageRes.arrayBuffer();
-        const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
-        imageUrl = `data:image/png;base64,${base64Image}`;
-        console.log(`[IMAGE] ✅ Success with ${model}`);
-        break;
+        const contentType = hfImageRes.headers.get("content-type");
+        if (contentType && contentType.startsWith("image/")) {
+          const imageBuffer = await hfImageRes.arrayBuffer();
+          const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+          imageUrl = `data:${contentType};base64,${base64Image}`;
+          console.log(`[IMAGE] ✅ Success with ${model} (${imageBuffer.byteLength} bytes)`);
+          break;
+        } else {
+          console.log(`[IMAGE] ❌ Unexpected content type: ${contentType}`);
+        }
       } else {
-        console.log(`[IMAGE] ❌ ${hfImageRes.status} from ${model}`);
+        const errorText = await hfImageRes.text();
+        console.log(`[IMAGE] ❌ ${hfImageRes.status} from ${model}: ${errorText.substring(0, 100)}`);
       }
     } catch (e) {
       console.error(`[IMAGE] Error with ${model}:`, e);
@@ -93,7 +107,7 @@ Just the post text.`
   }
   
   if (!imageUrl) {
-    console.log("[IMAGE] No image generated, continuing without it");
+    console.log("[IMAGE] ⚠️ No image generated, continuing without it");
   }
 
   // Save post with image to database
