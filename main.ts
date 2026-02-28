@@ -246,22 +246,33 @@ async function handleGeneratePost(req: Request): Promise<Response> {
 
 async function handleGenerateTrends(req: Request): Promise<Response> {
   try {
+    console.log("📊 POST /api/generate-trends - Starting trends generation");
     const groqApiKey = Deno.env.get("GROQ_API_KEY");
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
     const dbUrl = getDatabaseUrl();
     
     if (!groqApiKey && !hfApiKey) {
+      console.error("❌ No API keys configured (GROQ_API_KEY or HUGGINGFACE_API_KEY required)");
       return new Response(JSON.stringify({ error: "GROQ_API_KEY or HUGGINGFACE_API_KEY required" }), { status: 500, headers: corsHeaders });
     }
 
+    console.log("🔄 Generating trends...");
+    const startTime = Date.now();
     const trends = await generateTrends(dbUrl, groqApiKey, hfApiKey);
+    const duration = Date.now() - startTime;
+    
+    console.log(`✅ Trends generated successfully (${duration}ms)`);
+    console.log(`📈 Total trends: ${trends.length}`);
+    trends.forEach((t: any, i: number) => {
+      console.log(`   [${i + 1}] ${t.topic} (source: ${t.source})`);
+    });
 
     return new Response(JSON.stringify(trends), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 201,
     });
   } catch (e) {
-    console.error("POST /api/generate-trends error:", e);
+    console.error("❌ POST /api/generate-trends error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers: corsHeaders });
   }
 }

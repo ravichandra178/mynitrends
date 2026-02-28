@@ -14,8 +14,20 @@ export async function updateSettings(updates: Record<string, unknown>) {
 }
 
 export async function fetchTrends() {
+  console.log("[TRENDS LOG] 📊 Fetching trends from Supabase REST API...");
   const { data, error } = await supabase.from("trends").select("*").order("created_at", { ascending: false });
-  if (error) throw new Error("Failed to fetch trends");
+  
+  if (error) {
+    console.error("[TRENDS LOG] ❌ Failed to fetch trends:", error);
+    throw new Error("Failed to fetch trends");
+  }
+  
+  console.log(`[TRENDS LOG] ✅ Fetched ${data?.length || 0} trends from database:`);
+  data?.forEach((trend: any, index: number) => {
+    console.log(`[TRENDS LOG]   [${index + 1}] "${trend.topic}" | source: ${trend.source} | used: ${trend.used} | id: ${trend.id}`);
+  });
+  console.log("[TRENDS LOG] 📋 Full response:", data);
+  
   return data || [];
 }
 

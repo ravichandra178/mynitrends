@@ -197,14 +197,17 @@ Return ONLY valid JSON array, nothing else.`
   const savedTrends = [];
   
   try {
+    console.log(`[TRENDS] 📊 Starting to save ${trendsData.length} trends to database...`);
     for (const trendItem of trendsData) {
+      const topic = trendItem.trend || trendItem.topic;
       const result = await client.queryObject(
         "INSERT INTO trends (topic, source, used, created_at) VALUES ($1, $2, $3, NOW()) RETURNING *",
-        [trendItem.trend || trendItem.topic, appliedMethod, false]
+        [topic, appliedMethod, false]
       );
       savedTrends.push(result.rows[0]);
+      console.log(`   [${savedTrends.length}] Saved: "${topic}" (source: ${appliedMethod})`);
     }
-    console.log(`[TRENDS] 💾 Saved ${savedTrends.length} trends to DB (method: ${appliedMethod})`);
+    console.log(`[TRENDS] ✅ Successfully saved ${savedTrends.length} trends to DB (method: ${appliedMethod})`);
   } finally {
     await client.end();
   }
