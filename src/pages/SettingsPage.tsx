@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { fetchSettings, updateSettings, testConnection } from "@/lib/api-helpers";
+import { fetchSettings, updateSettings, testConnection, testGROQ, testHuggingFace, testRSS } from "@/lib/api-helpers";
 import { toast } from "sonner";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
 
@@ -21,6 +21,16 @@ export default function SettingsPage() {
     max_posts_per_day: 3,
   });
   const [testing, setTesting] = useState(false);
+  const [testingAI, setTestingAI] = useState({
+    groq: false,
+    huggingface: false,
+    rss: false,
+  });
+  const [testResults, setTestResults] = useState({
+    groq: null as any,
+    huggingface: null as any,
+    rss: null as any,
+  });
 
   useEffect(() => {
     if (settings) {
@@ -55,6 +65,60 @@ export default function SettingsPage() {
     }
   };
 
+  const testGROQConnection = async () => {
+    setTestingAI(prev => ({ ...prev, groq: true }));
+    try {
+      const result = await testGROQ();
+      setTestResults(prev => ({ ...prev, groq: result }));
+      if (result.success) {
+        toast.success(`GROQ working: ${result.message}`);
+      } else {
+        toast.error(`GROQ failed: ${result.error}`);
+      }
+    } catch (e: any) {
+      setTestResults(prev => ({ ...prev, groq: { success: false, error: e.message } }));
+      toast.error(`GROQ test failed: ${e.message}`);
+    } finally {
+      setTestingAI(prev => ({ ...prev, groq: false }));
+    }
+  };
+
+  const testHFConnection = async () => {
+    setTestingAI(prev => ({ ...prev, huggingface: true }));
+    try {
+      const result = await testHuggingFace();
+      setTestResults(prev => ({ ...prev, huggingface: result }));
+      if (result.success) {
+        toast.success(`Hugging Face working: ${result.message}`);
+      } else {
+        toast.error(`Hugging Face failed: ${result.error}`);
+      }
+    } catch (e: any) {
+      setTestResults(prev => ({ ...prev, huggingface: { success: false, error: e.message } }));
+      toast.error(`Hugging Face test failed: ${e.message}`);
+    } finally {
+      setTestingAI(prev => ({ ...prev, huggingface: false }));
+    }
+  };
+
+  const testRSSConnection = async () => {
+    setTestingAI(prev => ({ ...prev, rss: true }));
+    try {
+      const result = await testRSS();
+      setTestResults(prev => ({ ...prev, rss: result }));
+      if (result.success) {
+        toast.success(`RSS working: ${result.message}`);
+      } else {
+        toast.error(`RSS failed: ${result.error}`);
+      }
+    } catch (e: any) {
+      setTestResults(prev => ({ ...prev, rss: { success: false, error: e.message } }));
+      toast.error(`RSS test failed: ${e.message}`);
+    } finally {
+      setTestingAI(prev => ({ ...prev, rss: false }));
+    }
+  };
+
   if (isLoading) return <Layout><div className="flex items-center justify-center h-64 text-muted-foreground">Loading...</div></Layout>;
 
   return (
@@ -86,6 +150,118 @@ export default function SettingsPage() {
             {testing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
             Test Facebook Connection
           </Button>
+        </div>
+
+        <div className="space-y-4 border rounded-lg p-4">
+          <h3 className="text-sm font-medium">AI Model Testing</h3>
+          <p className="text-xs text-muted-foreground">Test your AI models and RSS feed connectivity</p>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3 border rounded">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  🤖
+                </div>
+                <div>
+                  <div className="font-medium">GROQ API</div>
+                  <div className="text-xs text-muted-foreground">llama2-70b-4096</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {testResults.groq && (
+                  <div className="flex items-center gap-1">
+                    {testResults.groq.success ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                    <span className="text-xs">
+                      {testResults.groq.success ? "Working" : "Failed"}
+                    </span>
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={testGROQConnection}
+                  disabled={testingAI.groq}
+                >
+                  {testingAI.groq ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  Test
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                  🤗
+                </div>
+                <div>
+                  <div className="font-medium">Hugging Face</div>
+                  <div className="text-xs text-muted-foreground">microsoft/DialoGPT-medium</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {testResults.huggingface && (
+                  <div className="flex items-center gap-1">
+                    {testResults.huggingface.success ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                    <span className="text-xs">
+                      {testResults.huggingface.success ? "Working" : "Failed"}
+                    </span>
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={testHFConnection}
+                  disabled={testingAI.huggingface}
+                >
+                  {testingAI.huggingface ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  Test
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                  📡
+                </div>
+                <div>
+                  <div className="font-medium">Google Trends RSS</div>
+                  <div className="text-xs text-muted-foreground">trends.google.com</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {testResults.rss && (
+                  <div className="flex items-center gap-1">
+                    {testResults.rss.success ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                    <span className="text-xs">
+                      {testResults.rss.success ? "Working" : "Failed"}
+                    </span>
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={testRSSConnection}
+                  disabled={testingAI.rss}
+                >
+                  {testingAI.rss ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  Test
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-4 border rounded-lg p-4">

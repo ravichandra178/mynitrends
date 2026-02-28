@@ -286,3 +286,48 @@ export async function testConnection() {
     throw new Error("Failed to test connection");
   }
 }
+
+export async function testGROQ() {
+  console.log("[API] Testing GROQ API connection...");
+  try {
+    const response = await fetch(`${API_BASE}/api/test-groq`, {
+      method: "POST",
+    });
+    const data = await response.json();
+    console.log("[API] GROQ test result:", data);
+    return data;
+  } catch (e) {
+    console.error("[API] ❌ GROQ test failed:", e);
+    throw new Error("Failed to test GROQ");
+  }
+}
+
+export async function testHuggingFace() {
+  console.log("[API] Testing Hugging Face API connection...");
+  try {
+    const response = await fetch(`${API_BASE}/api/test-huggingface`, {
+      method: "POST",
+    });
+    const data = await response.json();
+    console.log("[API] HF test result:", data);
+    return data;
+  } catch (e) {
+    console.error("[API] ❌ HF test failed:", e);
+    throw new Error("Failed to test Hugging Face");
+  }
+}
+
+export async function testRSS() {
+  console.log("[API] Testing Google Trends RSS feed...");
+  try {
+    const response = await fetch(`${API_BASE}/api/test-rss`, {
+      method: "POST",
+    });
+    const data = await response.json();
+    console.log("[API] RSS test result:", data);
+    return data;
+  } catch (e) {
+    console.error("[API] ❌ RSS test failed:", e);
+    throw new Error("Failed to test RSS");
+  }
+}

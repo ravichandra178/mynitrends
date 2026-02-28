@@ -411,6 +411,173 @@ async function handleTestConnection(req: Request): Promise<Response> {
   }
 }
 
+async function handleTestGROQ(req: Request): Promise<Response> {
+  try {
+    const groqApiKey = Deno.env.get("GROQ_API_KEY");
+    const groqModel = Deno.env.get("GROQ_MODEL") || "llama2-70b-4096";
+
+    if (!groqApiKey) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "GROQ_API_KEY not configured",
+        model: groqModel,
+        provider: "GROQ"
+      }), { status: 400, headers: corsHeaders });
+    }
+
+    console.log(`[TEST] Testing GROQ API with model: ${groqModel}`);
+
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${groqApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: groqModel,
+        messages: [{ role: "user", content: "Say 'Hello from GROQ!' in exactly 3 words." }],
+        max_tokens: 50,
+        temperature: 0.1,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: error.error?.message || `HTTP ${response.status}`,
+        model: groqModel,
+        provider: "GROQ"
+      }), { status: 200, headers: corsHeaders });
+    }
+
+    const data = await response.json();
+    const message = data.choices?.[0]?.message?.content?.trim();
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: message,
+      model: groqModel,
+      provider: "GROQ"
+    }), { headers: corsHeaders });
+  } catch (e) {
+    console.error("TEST GROQ error:", e);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: e instanceof Error ? e.message : String(e),
+      provider: "GROQ"
+    }), { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleTestHuggingFace(req: Request): Promise<Response> {
+  try {
+    const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
+    const hfModel = Deno.env.get("HF_TEXT_MODEL") || "microsoft/DialoGPT-medium";
+
+    if (!hfApiKey) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "HUGGINGFACE_API_KEY not configured",
+        model: hfModel,
+        provider: "Hugging Face"
+      }), { status: 400, headers: corsHeaders });
+    }
+
+    console.log(`[TEST] Testing Hugging Face API with model: ${hfModel}`);
+
+    const response = await fetch(`https://api-inference.huggingface.co/models/${hfModel}`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${hfApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        inputs: "Say 'Hello from Hugging Face!' in exactly 4 words.",
+        parameters: {
+          max_new_tokens: 50,
+          temperature: 0.1,
+          do_sample: false,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: error.error || `HTTP ${response.status}`,
+        model: hfModel,
+        provider: "Hugging Face"
+      }), { status: 200, headers: corsHeaders });
+    }
+
+    const data = await response.json();
+    let message = "";
+
+    if (Array.isArray(data) && data[0]?.generated_text) {
+      message = data[0].generated_text.replace("Say 'Hello from Hugging Face!' in exactly 4 words.", "").trim();
+    } else if (data.generated_text) {
+      message = data.generated_text.trim();
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: message,
+      model: hfModel,
+      provider: "Hugging Face"
+    }), { headers: corsHeaders });
+  } catch (e) {
+    console.error("TEST HF error:", e);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: e instanceof Error ? e.message : String(e),
+      provider: "Hugging Face"
+    }), { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleTestRSS(req: Request): Promise<Response> {
+  try {
+    console.log("[TEST] Testing Google Trends RSS feed...");
+
+    const response = await fetch("https://trends.google.com/trending/rss?geo=IN", {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; MyNitrends/1.0)",
+      },
+    });
+
+    if (!response.ok) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: `HTTP ${response.status}: ${response.statusText}`,
+        provider: "Google Trends RSS"
+      }), { status: 200, headers: corsHeaders });
+    }
+
+    const xmlText = await response.text();
+    const titleMatches = xmlText.match(/<title>([^<]+)<\/title>/g) || [];
+    const trends = titleMatches
+      .slice(1, 6) // Skip first title, take next 5
+      .map(match => match.replace(/<\/?title>/g, "").trim())
+      .filter(title => title && title !== "Daily Search Trends");
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: `Found ${trends.length} trends: ${trends.slice(0, 3).join(", ")}${trends.length > 3 ? "..." : ""}`,
+      trends: trends,
+      provider: "Google Trends RSS"
+    }), { headers: corsHeaders });
+  } catch (e) {
+    console.error("TEST RSS error:", e);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: e instanceof Error ? e.message : String(e),
+      provider: "Google Trends RSS"
+    }), { status: 500, headers: corsHeaders });
+  }
+}
+
 // Initialize database tables if they don't exist
 async function initializeDatabaseSchema() {
   try {
@@ -594,6 +761,9 @@ Deno.serve(async (req) => {
     if (path === "/api/post-to-facebook" && method === "POST") return await handlePostToFacebook(req);
     if (path === "/api/fetch-engagement" && method === "POST") return await handleFetchEngagement(req);
     if (path === "/api/test-connection" && method === "POST") return await handleTestConnection(req);
+    if (path === "/api/test-groq" && method === "POST") return await handleTestGROQ(req);
+    if (path === "/api/test-huggingface" && method === "POST") return await handleTestHuggingFace(req);
+    if (path === "/api/test-rss" && method === "POST") return await handleTestRSS(req);
   } catch (e) {
     console.error(`Error handling ${method} ${path}:`, e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
