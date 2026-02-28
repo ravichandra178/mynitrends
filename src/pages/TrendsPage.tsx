@@ -55,7 +55,9 @@ export default function TrendsPage() {
   const handleFetchTrends = async () => {
     setFetchingTrends(true);
     try {
+      console.log("[TrendsPage] Invoking generate-trends...");
       const { data, error } = await supabase.functions.invoke("generate-trends");
+      console.log("[TrendsPage] generate-trends response:", data, "error:", error);
       if (error) throw error;
       if (data?.added > 0) {
         toast.success(`Added ${data.added} trending topics (${data.source})`);
@@ -64,6 +66,7 @@ export default function TrendsPage() {
         toast.info(data?.message || "No new trends found");
       }
     } catch (e: any) {
+      console.error("[TrendsPage] generate-trends failed:", e);
       toast.error(e.message || "Failed to fetch trends");
     } finally {
       setFetchingTrends(false);
