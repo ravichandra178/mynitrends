@@ -35,7 +35,7 @@ async function fetchTrendsFromRSS(): Promise<any[]> {
 }
 
 export async function generateTrends(dbUrl: string, groqApiKey: string, hfApiKey?: string): Promise<any[]> {
-  const groqModel = (Deno.env.get("GROQ_MODEL") || "qwen/qwen3-32b").trim();
+  const groqModel = (Deno.env.get("GROQ_MODEL") || "qwen-3-32b").trim();
   const preferHF = Deno.env.get("TRENDS_USE_HF") === "true";
   
   let trendsData: any[] = [];

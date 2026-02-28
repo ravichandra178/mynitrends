@@ -11,7 +11,7 @@ Enhanced logging in `src/lib/api-helpers.ts` shows exactly what's happening duri
 ```
 [TRENDS LOG] 🔵 Generating trends from /api/generate-trends...
 [TRENDS LOG] 🤖 AI Trend Generation Attempt:
-[TRENDS LOG]   Model: GROQ (qwen/qwen3-32b)
+[TRENDS LOG]   Model: GROQ (qwen-3-32b)
 [TRENDS LOG]   Source: API Endpoint
 [TRENDS LOG] ⏳ Waiting for AI response...
 [TRENDS LOG] ✅ AI SUCCESS: Generated 5 trends
