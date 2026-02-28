@@ -233,7 +233,7 @@ async function handleGeneratePost(req: Request): Promise<Response> {
 
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
     const dbUrl = getDatabaseUrl();
-    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "microsoft/DialoGPT-medium").trim();
+    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "Mistral-7B-Instruct-v0.2").trim();
     const hfModel = (Deno.env.get("HF_MODEL") || "deepgenteam/DeepGen-1.0").trim();
     
     console.log("Generate post request - Text model:", hfTextModel, "Image model:", hfModel);
@@ -522,7 +522,7 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
   try {
     const { model } = await req.json();
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
-    const hfModel = model || Deno.env.get("HF_TEXT_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2";
+    const hfModel = model || Deno.env.get("HF_TEXT_MODEL") || "gpt2";
 
     if (!hfApiKey) {
       return new Response(JSON.stringify({ 
@@ -535,7 +535,7 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
 
     console.log(`[TEST] Testing Hugging Face API with model: ${hfModel}`);
 
-    const response = await fetch(`https://router.huggingface.co/hf-inference/models/${hfModel}`, {
+    const response = await fetch(`https://api-inference.huggingface.co/models/${hfModel}`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${hfApiKey}`,
@@ -552,10 +552,18 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      let errorMessage = `HTTP ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (e) {
+        // If response is not JSON, use status text
+        errorMessage = response.statusText || errorMessage;
+      }
+      
       return new Response(JSON.stringify({ 
         success: false, 
-        error: error.error || `HTTP ${response.status}`,
+        error: errorMessage,
         model: hfModel,
         provider: "Hugging Face"
       }), { status: 200, headers: corsHeaders });

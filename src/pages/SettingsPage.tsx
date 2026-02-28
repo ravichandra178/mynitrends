@@ -47,7 +47,7 @@ export default function SettingsPage() {
         auto_post_enabled: settings.auto_post_enabled ?? false,
         max_posts_per_day: settings.max_posts_per_day ?? 3,
         groq_model: "llama-3.1-8b-instant", // Default, will be overridden by env vars
-        hf_model: "microsoft/DialoGPT-medium", // Default, will be overridden by env vars
+        hf_model: "gpt2", // Default, will be overridden by env vars
       });
     }
   }, [settings]);
@@ -198,7 +198,7 @@ export default function SettingsPage() {
                 id="hf_model"
                 value={form.hf_model}
                 onChange={(e) => setForm({ ...form, hf_model: e.target.value })}
-                placeholder="mistralai/Mistral-7B-Instruct-v0.2"
+                placeholder="gpt2"
               />
             </div>
           </div>
@@ -316,7 +316,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <div className="font-medium">Facebook Page</div>
-                  <div className="text-xs text-muted-foreground">{form.facebook_page_id || "No Page ID set"}</div>
+                  <div className="text-xs text-muted-foreground">{form.facebook_page_id || "61586953905789"}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
