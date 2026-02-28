@@ -583,6 +583,7 @@ Deno.serve(async (req) => {
 
   // Serve static files for SPA
   if (path === "/" || path === "/index.html") {
+    console.log("📄 Serving index.html");
     const staticPath = "./dist/index.html";
     try {
       const content = await Deno.readFile(staticPath);
@@ -610,14 +611,16 @@ Deno.serve(async (req) => {
         svg: "image/svg+xml",
       };
       const contentType = contentTypes[ext || ""] || "application/octet-stream";
+      console.log(`📂 Serving static file: ${path}`);
       return new Response(content, {
         headers: { "Content-Type": contentType, ...corsHeaders },
       });
     } catch (e) {
-      console.log(`Static file not found: ${staticPath}, falling back to SPA`);
+      console.log(`🔄 Static file not found: ${staticPath}, falling back to SPA for client-side routing (path: ${path})`);
       // Fall back to SPA index.html for client-side routing
       try {
         const content = await Deno.readFile("./dist/index.html");
+        console.log(`📄 SPA fallback served for: ${path}`);
         return new Response(content, {
           headers: { "Content-Type": "text/html", ...corsHeaders },
         });
