@@ -41,7 +41,8 @@ async function generateTrendsWithAI(): Promise<string[]> {
 
   try {
     console.log("[TRENDS] 🟠 Generating trends with Lovable AI...");
-    const res = await fetch("https://api.lovable.dev/v1/chat/completions", {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const res = await fetch(`${supabaseUrl}/functions/v1/ai-proxy`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${lovableApiKey}`,
