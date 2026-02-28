@@ -415,7 +415,7 @@ async function handleTestGROQ(req: Request): Promise<Response> {
   try {
     const { model } = await req.json();
     const groqApiKey = Deno.env.get("GROQ_API_KEY");
-    const groqModel = model || Deno.env.get("GROQ_MODEL") || "llama3-8b-8192";
+    const groqModel = model || Deno.env.get("GROQ_MODEL") || "llama-3.1-8b-instant";
 
     if (!groqApiKey) {
       return new Response(JSON.stringify({ 
@@ -438,7 +438,7 @@ async function handleTestGROQ(req: Request): Promise<Response> {
         model: groqModel,
         messages: [{ role: "user", content: "Say 'Hello from GROQ!' in exactly 3 words." }],
         max_tokens: 50,
-        temperature: 0.1,
+        temperature: 0.4,
       }),
     });
 
@@ -498,7 +498,7 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
         inputs: "Say 'Hello from Hugging Face!' in exactly 4 words.",
         parameters: {
           max_new_tokens: 50,
-          temperature: 0.1,
+          temperature: 0.4,
           do_sample: false,
         },
       }),

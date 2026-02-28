@@ -47,7 +47,7 @@ async function fetchTrendsFromRSS(): Promise<any[]> {
 }
 
 export async function generateTrends(dbUrl: string, groqApiKey: string, hfApiKey?: string): Promise<any[]> {
-  const groqModel = (Deno.env.get("GROQ_MODEL") || "llama3-8b-8192").trim();
+  const groqModel = (Deno.env.get("GROQ_MODEL") || "llama-3.1-8b-instant").trim();
   const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "microsoft/DialoGPT-medium").trim();
 
   let trendsData: any[] = [];
@@ -97,7 +97,7 @@ Return ONLY valid JSON array, nothing else.`
             }
           ],
           max_tokens: 500,
-          temperature: 0.3,
+          temperature: 0.4,
         }),
         signal: AbortSignal.timeout(10000)
       });

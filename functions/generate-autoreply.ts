@@ -6,7 +6,7 @@ export async function generateAutoreply(dbUrl: string, groqApiKey: string, comme
   }
 
   // Call GROQ API with configurable model
-  const groqModel = Deno.env.get("GROQ_MODEL") || "llama3-8b-8192";
+  const groqModel = Deno.env.get("GROQ_MODEL") || "llama-3.1-8b-instant";
   
   const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
