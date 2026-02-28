@@ -207,9 +207,12 @@ export async function generateTrends() {
   try {
     const startTime = performance.now();
     
+    // Get GROQ model from environment variable
+    const groqModel = Deno.env.get("GROQ_MODEL") || "qwen-3-32b";
+    
     // Log AI attempt details
     console.log("%c[TRENDS LOG] 🤖 AI Trend Generation Attempt:", "color: purple; font-weight: bold;");
-    console.log(`%c[TRENDS LOG]   Model: GROQ (qwen-3-32b)`, "color: gray;");
+    console.log(`%c[TRENDS LOG]   Model: GROQ (${groqModel})`, "color: gray;");
     console.log(`%c[TRENDS LOG]   Source: API Endpoint`, "color: gray;");
     console.log("%c[TRENDS LOG] ⏳ Waiting for AI response...", "color: orange;");
     

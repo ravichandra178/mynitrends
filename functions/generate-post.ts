@@ -52,7 +52,9 @@ Just the post text.`
 
   // Generate image using working free tier models
   let imageUrl = null;
+  const primaryModel = (Deno.env.get("HF_MODEL") || "runwayml/stable-diffusion-v1-5").trim();
   const imageModels = [
+    primaryModel,
     "runwayml/stable-diffusion-v1-5",
     "stabilityai/stable-diffusion-xl-base-1.0",
   ];

@@ -35,84 +35,14 @@ async function fetchTrendsFromRSS(): Promise<any[]> {
 }
 
 export async function generateTrends(dbUrl: string, groqApiKey: string, hfApiKey?: string): Promise<any[]> {
-  const groqModel = (Deno.env.get("GROQ_MODEL") || "qwen-3-32b").trim();
-  const preferHF = Deno.env.get("TRENDS_USE_HF") === "true";
+  const groqModel = (Deno.env.get("GROQ_MODEL") || "qwen3-3-32b").trim();
   
   let trendsData: any[] = [];
   let appliedMethod = "";
   
-  // Try HF first if preferred
-  if (preferHF && hfApiKey) {
-    console.log("[TRENDS] 🔵 Trying HF JSON model...");
-    const hfModel = (Deno.env.get("HF_JSON_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2").trim();
-    
-    try {
-      const hfRes = await fetch("https://router.huggingface.co/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${hfApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: hfModel,
-          messages: [
-            {
-              role: "system",
-              content: `You are a trends generation API.
-Return ONLY valid JSON.
-Do NOT include explanations, markdown, or backticks.
-Output must be a valid JSON array.
-Each item must follow this exact format:
-{
-  "trend": "string",
-  "source": "string",
-  "category": "string",
-  "engagement_score": number
-}
-If output is not valid JSON, regenerate until valid.`
-            },
-            {
-              role: "user",
-              content: `Generate 5 latest social media trends relevant for India in 2026.
-Sources can be: Facebook, Instagram, YouTube, X, LinkedIn.
-Engagement score must be between 1 and 100.
-Return ONLY valid JSON array, nothing else.`
-            }
-          ],
-          max_tokens: 500,
-          temperature: 0.3,
-        }),
-        signal: AbortSignal.timeout(10000)
-      });
-
-      if (hfRes.ok) {
-        const hfData = await hfRes.json();
-        const content = hfData.choices[0].message.content.trim();
-        console.log("[TRENDS] HF Response:", content.substring(0, 200));
-        
-        try {
-          // Try to parse JSON from response
-          const jsonMatch = content.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            trendsData = JSON.parse(jsonMatch[0]);
-            appliedMethod = "HF";
-            console.log("[TRENDS] ✅ HF SUCCESS:", trendsData.length, "trends parsed");
-          }
-        } catch (e) {
-          console.error("[TRENDS] ❌ HF JSON parse failed:", e);
-        }
-      } else {
-        const error = await hfRes.text();
-        console.error("[TRENDS] ❌ HF error:", error.substring(0, 200));
-      }
-    } catch (e) {
-      console.error("[TRENDS] ❌ HF request failed:", e);
-    }
-  }
-  
-  // Try GROQ if HF didn't work or not preferred
-  if (trendsData.length === 0 && groqApiKey) {
-    console.log("[TRENDS] 🟠 Trying GROQ model:", groqModel);
+  // Try GROQ first (primary AI method)
+  if (groqApiKey) {
+    console.log("[TRENDS] 🔵 Trying GROQ model:", groqModel);
     
     try {
       const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -175,6 +105,75 @@ Return ONLY valid JSON array, nothing else.`
       }
     } catch (e) {
       console.error("[TRENDS] ❌ GROQ request failed:", e);
+    }
+  }
+  
+  // Try HF as first fallback if GROQ failed
+  if (trendsData.length === 0 && hfApiKey) {
+    console.log("[TRENDS] 🟠 Trying HF text model as fallback...");
+    const hfModel = (Deno.env.get("HF_TEXT_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2").trim();
+    
+    try {
+      const hfRes = await fetch("https://router.huggingface.co/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${hfApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: hfModel,
+          messages: [
+            {
+              role: "system",
+              content: `You are a trends generation API.
+Return ONLY valid JSON.
+Do NOT include explanations, markdown, or backticks.
+Output must be a valid JSON array.
+Each item must follow this exact format:
+{
+  "trend": "string",
+  "source": "string",
+  "category": "string",
+  "engagement_score": number
+}
+If output is not valid JSON, regenerate until valid.`
+            },
+            {
+              role: "user",
+              content: `Generate 5 latest social media trends relevant for India in 2026.
+Sources can be: Facebook, Instagram, YouTube, X, LinkedIn.
+Engagement score must be between 1 and 100.
+Return ONLY valid JSON array, nothing else.`
+            }
+          ],
+          max_tokens: 500,
+          temperature: 0.3,
+        }),
+        signal: AbortSignal.timeout(10000)
+      });
+
+      if (hfRes.ok) {
+        const hfData = await hfRes.json();
+        const content = hfData.choices[0].message.content.trim();
+        console.log("[TRENDS] HF Response:", content.substring(0, 200));
+        
+        try {
+          // Try to parse JSON from response
+          const jsonMatch = content.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            trendsData = JSON.parse(jsonMatch[0]);
+            appliedMethod = "HF";
+            console.log("[TRENDS] ✅ HF SUCCESS:", trendsData.length, "trends parsed");
+          }
+        } catch (e) {
+          console.error("[TRENDS] ❌ HF JSON parse failed:", e);
+        }
+      } else {
+        const error = await hfRes.text();
+        console.error("[TRENDS] ❌ HF error:", error.substring(0, 200));
+      }
+    } catch (e) {
+      console.error("[TRENDS] ❌ HF request failed:", e);
     }
   }
   
