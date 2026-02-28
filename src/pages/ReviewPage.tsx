@@ -3,7 +3,7 @@ import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchSettings, fetchPosts } from "@/lib/supabase-helpers";
+import { fetchSettings, fetchPosts } from "@/lib/api-helpers";
 import { CheckCircle, XCircle, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
 
