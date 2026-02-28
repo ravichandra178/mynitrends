@@ -8,23 +8,39 @@ const API_BASE = '';  // Relative URL (same origin)
 // ====================================
 
 export async function fetchTrends() {
-  console.log("[API] Fetching trends from /api/trends...");
+  console.log("%c[TRENDS LOG] 📊 Fetching trends from /api/trends...", "color: blue; font-weight: bold;");
   try {
     const response = await fetch(`${API_BASE}/api/trends`);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${await response.text()}`);
     }
     const data = await response.json();
-    console.log("[API] ✅ Trends fetched:", data);
+    
+    console.log(`%c[TRENDS LOG] ✅ Fetched ${data?.length || 0} trends from database:`, "color: green; font-weight: bold;");
+    
+    if (data && data.length > 0) {
+      data.forEach((trend: any, index: number) => {
+        const sourceEmoji = trend.source === "groq" || trend.source === "hf" ? "🤖" : trend.source === "rss" ? "📡" : "👤";
+        const statusEmoji = trend.used ? "✅" : "⭕";
+        console.log(
+          `%c[TRENDS LOG]   [${index + 1}] ${sourceEmoji} "${trend.topic}" | source: ${trend.source} | status: ${statusEmoji} ${trend.used ? "Used" : "Available"} | id: ${trend.id}`,
+          "color: gray;"
+        );
+      });
+    }
+    
+    console.log("%c[TRENDS LOG] 📋 Full response:", "color: blue;");
+    console.table(data);
+    
     return data || [];
   } catch (e) {
-    console.error("[API] ❌ Failed to fetch trends:", e);
+    console.error("%c[TRENDS LOG] ❌ Failed to fetch trends:", "color: red; font-weight: bold;", e);
     throw new Error("Failed to fetch trends");
   }
 }
 
 export async function addTrend(topic: string) {
-  console.log("[API] Adding trend:", topic);
+  console.log(`%c[TRENDS LOG] ➕ Adding manual trend: "${topic}"`, "color: blue; font-weight: bold;");
   try {
     const response = await fetch(`${API_BASE}/api/trends`, {
       method: "POST",
@@ -35,10 +51,13 @@ export async function addTrend(topic: string) {
       throw new Error(`HTTP ${response.status}: ${await response.text()}`);
     }
     const data = await response.json();
-    console.log("[API] ✅ Trend added:", data);
+    console.log(`%c[TRENDS LOG] ✅ Trend added successfully:`, "color: green; font-weight: bold;");
+    console.log(`%c[TRENDS LOG]   Topic: "${data.topic}"`, "color: green;");
+    console.log(`%c[TRENDS LOG]   Source: manual`, "color: green;");
+    console.log(`%c[TRENDS LOG]   ID: ${data.id}`, "color: green;");
     return data;
   } catch (e) {
-    console.error("[API] ❌ Failed to add trend:", e);
+    console.error(`%c[TRENDS LOG] ❌ Failed to add trend "${topic}":`, "color: red; font-weight: bold;", e);
     throw new Error("Failed to add trend");
   }
 }
@@ -184,20 +203,49 @@ export async function generatePost(trendId: string, topic: string) {
 }
 
 export async function generateTrends() {
-  console.log("[API] Generating trends from /api/generate-trends...");
+  console.log("%c[TRENDS LOG] 🔵 Generating trends from /api/generate-trends...", "color: blue; font-weight: bold;");
   try {
+    const startTime = performance.now();
+    
+    // Log AI attempt details
+    console.log("%c[TRENDS LOG] 🤖 AI Trend Generation Attempt:", "color: purple; font-weight: bold;");
+    console.log(`%c[TRENDS LOG]   Model: GROQ (qwen/qwen3-32b)`, "color: gray;");
+    console.log(`%c[TRENDS LOG]   Source: API Endpoint`, "color: gray;");
+    console.log("%c[TRENDS LOG] ⏳ Waiting for AI response...", "color: orange;");
+    
     const response = await fetch(`${API_BASE}/api/generate-trends`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
     });
+    
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${await response.text()}`);
     }
+    
     const data = await response.json();
-    console.log("[API] ✅ Trends generated:", data);
+    const duration = (performance.now() - startTime).toFixed(2);
+    
+    // Log success with source information
+    if (data?.source === "groq" || data?.source === "hf") {
+      console.log(`%c[TRENDS LOG] ✅ AI SUCCESS: Generated ${data?.added || 0} trends`, "color: green; font-weight: bold;");
+      console.log(`%c[TRENDS LOG]   Source: ${data.source.toUpperCase()}`, "color: green;");
+      console.log(`%c[TRENDS LOG]   Duration: ${duration}ms`, "color: green;");
+      console.log(`%c[TRENDS LOG]   Topics: ${data?.topics?.join(", ") || "N/A"}`, "color: green;");
+    } else if (data?.source === "rss") {
+      console.log(`%c[TRENDS LOG] 📡 RSS FALLBACK: Fetched ${data?.added || 0} trends from Google Trends feed`, "color: orange; font-weight: bold;");
+      console.log(`%c[TRENDS LOG]   Source: Google Trends RSS`, "color: orange;");
+      console.log(`%c[TRENDS LOG]   Duration: ${duration}ms`, "color: orange;");
+      console.log(`%c[TRENDS LOG]   Topics: ${data?.topics?.join(", ") || "N/A"}`, "color: orange;");
+    }
+    
+    console.log("%c[TRENDS LOG] 📊 Full Response:", "color: blue; font-weight: bold;");
+    console.table(data);
+    
     return data;
   } catch (e) {
-    console.error("[API] ❌ Failed to generate trends:", e);
+    console.error("%c[TRENDS LOG] ❌ Failed to generate trends:", "color: red; font-weight: bold;", e);
+    console.log("%c[TRENDS LOG] 📋 Error Details:", "color: red;");
+    console.log(e);
     throw new Error("Failed to generate trends");
   }
 }
