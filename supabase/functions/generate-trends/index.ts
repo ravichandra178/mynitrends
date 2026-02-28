@@ -94,22 +94,19 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    console.log("[TRENDS] 🔵 Starting generate-trends request");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Try AI first, then RSS fallback
-    let topics = await generateTrendsWithAI();
-    let source = "AI";
+    // Try RSS first (fastest, no API calls needed)
+    console.log("[TRENDS] 🔴 Skipping AI (Supabase AI endpoint not available), using RSS directly");
+    let topics = await fetchTrendsFromRSS();
+    let source = "RSS";
 
     if (topics.length === 0) {
-      console.log("[TRENDS] 🔴 AI failed, falling back to RSS/Google Trends");
-      topics = await fetchTrendsFromRSS();
-      source = "RSS";
-    }
-
-    if (topics.length === 0) {
-      return new Response(JSON.stringify({ success: false, added: 0, message: "Failed to fetch trends from all sources (AI, RSS)" }), {
+      console.log("[TRENDS] ⚠️ RSS also failed, returning error");
+      return new Response(JSON.stringify({ success: false, added: 0, message: "Failed to fetch trends from RSS" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -118,12 +115,17 @@ serve(async (req) => {
     console.log("[TRENDS] Source:", source);
 
     // Check for duplicates
-    const { data: existing } = await supabase.from("trends").select("topic");
+    const { data: existing, error: selectError } = await supabase.from("trends").select("topic");
+    if (selectError) {
+      console.error("[TRENDS] ❌ Failed to fetch existing trends:", selectError);
+      throw new Error(`Failed to check existing trends: ${selectError.message}`);
+    }
+    
     const existingTopics = new Set((existing || []).map((t: any) => t.topic.toLowerCase()));
     const newTopics = topics.filter((t) => !existingTopics.has(t.toLowerCase()));
 
     if (newTopics.length === 0) {
-      console.log("[TRENDS] All topics already exist");
+      console.log("[TRENDS] ℹ️ All topics already exist");
       return new Response(JSON.stringify({ success: true, added: 0, message: "All topics already exist" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -131,18 +133,22 @@ serve(async (req) => {
 
     // Insert new trends
     const rows = newTopics.map((topic) => ({ topic, source, used: false }));
+    console.log("[TRENDS] 💾 Inserting new trends:", JSON.stringify(rows));
     const { error } = await supabase.from("trends").insert(rows);
-    if (error) throw new Error(`DB insert failed: ${error.message}`);
+    if (error) {
+      console.error("[TRENDS] ❌ DB insert failed:", error);
+      throw new Error(`DB insert failed: ${error.message}`);
+    }
 
-    console.log(`[TRENDS] 💾 Saved ${newTopics.length} trends (source: ${source}):`, JSON.stringify(newTopics));
+    console.log(`[TRENDS] ✅ Successfully saved ${newTopics.length} trends (source: ${source}):`, JSON.stringify(newTopics));
 
     return new Response(JSON.stringify({ success: true, added: newTopics.length, topics: newTopics, source }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
-    console.error("[TRENDS] generate-trends error:", e);
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    console.error("[TRENDS] ❌ generate-trends error:", e);
+    return new Response(JSON.stringify({ error: errorMessage, success: false }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
