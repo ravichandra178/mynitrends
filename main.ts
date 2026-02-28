@@ -413,8 +413,9 @@ async function handleTestConnection(req: Request): Promise<Response> {
 
 async function handleTestGROQ(req: Request): Promise<Response> {
   try {
+    const { model } = await req.json();
     const groqApiKey = Deno.env.get("GROQ_API_KEY");
-    const groqModel = Deno.env.get("GROQ_MODEL") || "llama2-70b-4096";
+    const groqModel = model || Deno.env.get("GROQ_MODEL") || "llama3-8b-8192";
 
     if (!groqApiKey) {
       return new Response(JSON.stringify({ 
@@ -472,8 +473,9 @@ async function handleTestGROQ(req: Request): Promise<Response> {
 
 async function handleTestHuggingFace(req: Request): Promise<Response> {
   try {
+    const { model } = await req.json();
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
-    const hfModel = Deno.env.get("HF_TEXT_MODEL") || "microsoft/DialoGPT-medium";
+    const hfModel = model || Deno.env.get("HF_TEXT_MODEL") || "microsoft/DialoGPT-medium";
 
     if (!hfApiKey) {
       return new Response(JSON.stringify({ 
@@ -486,7 +488,7 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
 
     console.log(`[TEST] Testing Hugging Face API with model: ${hfModel}`);
 
-    const response = await fetch(`https://api-inference.huggingface.co/models/${hfModel}`, {
+    const response = await fetch(`https://router.huggingface.co/hf-inference/models/${hfModel}`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${hfApiKey}`,

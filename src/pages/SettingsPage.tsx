@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { fetchSettings, updateSettings, testConnection, testGROQ, testHuggingFace, testRSS } from "@/lib/api-helpers";
-import { toast } from "sonner";
+
+// Import API_BASE for direct API calls
+const API_BASE = '';
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
 
 export default function SettingsPage() {
@@ -19,6 +21,8 @@ export default function SettingsPage() {
     facebook_page_access_token: "",
     auto_post_enabled: false,
     max_posts_per_day: 3,
+    groq_model: "llama3-8b-8192",
+    hf_model: "microsoft/DialoGPT-medium",
   });
   const [testing, setTesting] = useState(false);
   const [testingAI, setTestingAI] = useState({
@@ -39,6 +43,8 @@ export default function SettingsPage() {
         facebook_page_access_token: settings.facebook_page_access_token ?? "",
         auto_post_enabled: settings.auto_post_enabled ?? false,
         max_posts_per_day: settings.max_posts_per_day ?? 3,
+        groq_model: "llama3-8b-8192", // Default, will be overridden by env vars
+        hf_model: "microsoft/DialoGPT-medium", // Default, will be overridden by env vars
       });
     }
   }, [settings]);
@@ -68,7 +74,12 @@ export default function SettingsPage() {
   const testGROQConnection = async () => {
     setTestingAI(prev => ({ ...prev, groq: true }));
     try {
-      const result = await testGROQ();
+      const response = await fetch(`${API_BASE}/api/test-groq`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: form.groq_model }),
+      });
+      const result = await response.json();
       setTestResults(prev => ({ ...prev, groq: result }));
       if (result.success) {
         toast.success(`GROQ working: ${result.message}`);
@@ -86,7 +97,12 @@ export default function SettingsPage() {
   const testHFConnection = async () => {
     setTestingAI(prev => ({ ...prev, huggingface: true }));
     try {
-      const result = await testHuggingFace();
+      const response = await fetch(`${API_BASE}/api/test-huggingface`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: form.hf_model }),
+      });
+      const result = await response.json();
       setTestResults(prev => ({ ...prev, huggingface: result }));
       if (result.success) {
         toast.success(`Hugging Face working: ${result.message}`);
@@ -156,6 +172,28 @@ export default function SettingsPage() {
           <h3 className="text-sm font-medium">AI Model Testing</h3>
           <p className="text-xs text-muted-foreground">Test your AI models and RSS feed connectivity</p>
 
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="groq_model">GROQ Model</Label>
+              <Input
+                id="groq_model"
+                value={form.groq_model}
+                onChange={(e) => setForm({ ...form, groq_model: e.target.value })}
+                placeholder="llama3-8b-8192"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="hf_model">Hugging Face Model</Label>
+              <Input
+                id="hf_model"
+                value={form.hf_model}
+                onChange={(e) => setForm({ ...form, hf_model: e.target.value })}
+                placeholder="microsoft/DialoGPT-medium"
+              />
+            </div>
+          </div>
+
           <div className="space-y-3">
             <div className="flex items-center justify-between p-3 border rounded">
               <div className="flex items-center gap-3">
@@ -164,7 +202,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <div className="font-medium">GROQ API</div>
-                  <div className="text-xs text-muted-foreground">llama2-70b-4096</div>
+                  <div className="text-xs text-muted-foreground">{form.groq_model}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -199,7 +237,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <div className="font-medium">Hugging Face</div>
-                  <div className="text-xs text-muted-foreground">microsoft/DialoGPT-medium</div>
+                  <div className="text-xs text-muted-foreground">{form.hf_model}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
