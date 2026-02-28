@@ -18,26 +18,34 @@ function getDatabaseUrl(): string {
     throw new Error("DATABASE_URL environment variable is not set!");
   }
 
-  // Parse URL to check if database name is present
-  try {
-    const url = new URL(dbUrl);
-    console.log(`Parsed URL - hostname: ${url.hostname}, pathname: "${url.pathname}", search: "${url.search}"`);
-    
-    // If pathname is empty or just "/" then database name is missing
-    if (!url.pathname || url.pathname === "/") {
-      console.log("❌ Missing database name in URL - appending /postgres");
-      
-      // Rebuild URL with database name
-      const baseUrl = `${url.protocol}//${url.username ? url.username + ':' + url.password + '@' : ''}${url.hostname}${url.port ? ':' + url.port : ''}/postgres`;
-      dbUrl = baseUrl + url.search;
-      
-      console.log(`✅ Modified URL: ${baseUrl.substring(0, 60)}...`);
+  console.log("[DB] Raw DATABASE_URL loaded from environment");
+
+  // If URL doesn't have a database name (pathname), add /postgres
+  // This handles Prisma URLs that may not include the database name
+  if (!dbUrl.includes("postgresql://")) {
+    throw new Error("DATABASE_URL must start with postgresql://");
+  }
+
+  // Check if there's a database name after the host:port
+  // Valid formats:
+  // - postgresql://user:pass@host:port/dbname
+  // - postgresql://user:pass@host:port/dbname?sslmode=require
+  
+  const hasDatabase = /\/[a-zA-Z0-9_-]+(\?|$)/.test(dbUrl);
+  
+  if (!hasDatabase) {
+    console.log("[DB] ⚠️  No database name found - appending /postgres");
+    // Add /postgres if no database name is present
+    if (dbUrl.includes("?")) {
+      // Insert /postgres before query params
+      dbUrl = dbUrl.replace("?", "/postgres?");
     } else {
-      console.log(`✅ URL already has database: ${url.pathname}`);
+      // Append /postgres at the end
+      dbUrl = dbUrl + "/postgres";
     }
-  } catch (e) {
-    console.error("Failed to parse DATABASE_URL:", e);
-    throw new Error(`Invalid DATABASE_URL format: ${e}`);
+    console.log("[DB] ✅ Database URL corrected - now includes /postgres");
+  } else {
+    console.log("[DB] ✅ Database URL already has database name");
   }
 
   return dbUrl;
@@ -45,10 +53,12 @@ function getDatabaseUrl(): string {
 
 async function getConnection() {
   const dbUrl = getDatabaseUrl();
-  console.log(`Final DB URL pathname check - has database: ${new URL(dbUrl).pathname}`);
+  console.log("[DB] Establishing connection to PostgreSQL...");
   
-  const client = new Client(dbUrl); // Pass URL string directly, not as property
+  const client = new Client(dbUrl);
   await client.connect();
+  console.log("[DB] ✅ Connection established successfully");
+  
   return client;
 }
 
