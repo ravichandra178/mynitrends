@@ -287,6 +287,23 @@ export async function testConnection() {
   }
 }
 
+export async function testFacebookConnection(pageId: string, accessToken: string) {
+  console.log("[API] Testing Facebook page connection...");
+  try {
+    const response = await fetch(`${API_BASE}/api/test-facebook-connection`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pageId, accessToken }),
+    });
+    const data = await response.json();
+    console.log("[API] Facebook test result:", data);
+    return data;
+  } catch (e) {
+    console.error("[API] ❌ Facebook test failed:", e);
+    throw new Error("Failed to test Facebook connection");
+  }
+}
+
 export async function testGROQ() {
   console.log("[API] Testing GROQ API connection...");
   try {

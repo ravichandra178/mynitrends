@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { fetchSettings, updateSettings, testConnection, testGROQ, testHuggingFace, testRSS } from "@/lib/api-helpers";
+import { fetchSettings, updateSettings, testConnection, testGROQ, testHuggingFace, testRSS, testFacebookConnection } from "@/lib/api-helpers";
 import { toast } from "sonner";
 
 // Import API_BASE for direct API calls
@@ -18,23 +18,25 @@ export default function SettingsPage() {
   const { data: settings, isLoading } = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
 
   const [form, setForm] = useState({
-    facebook_page_id: "",
+    facebook_page_id: "61586953905789",
     facebook_page_access_token: "",
     auto_post_enabled: false,
     max_posts_per_day: 3,
     groq_model: "llama-3.1-8b-instant",
-    hf_model: "gpt2",
+    hf_model: "mistralai/Mistral-7B-Instruct-v0.2",
   });
   const [testing, setTesting] = useState(false);
   const [testingAI, setTestingAI] = useState({
     groq: false,
     huggingface: false,
     rss: false,
+    facebook: false,
   });
   const [testResults, setTestResults] = useState({
     groq: null as any,
     huggingface: null as any,
     rss: null as any,
+    facebook: null as any,
   });
 
   useEffect(() => {
@@ -44,7 +46,7 @@ export default function SettingsPage() {
         facebook_page_access_token: settings.facebook_page_access_token ?? "",
         auto_post_enabled: settings.auto_post_enabled ?? false,
         max_posts_per_day: settings.max_posts_per_day ?? 3,
-        groq_model: "llama3-8b-8192", // Default, will be overridden by env vars
+        groq_model: "llama-3.1-8b-instant", // Default, will be overridden by env vars
         hf_model: "microsoft/DialoGPT-medium", // Default, will be overridden by env vars
       });
     }
@@ -56,19 +58,25 @@ export default function SettingsPage() {
     onError: () => toast.error("Failed to save"),
   });
 
-  const testConnection = async () => {
+  const testFacebookConnectionUI = async () => {
     if (!form.facebook_page_id || !form.facebook_page_access_token) {
       toast.error("Enter Page ID and Access Token first");
       return;
     }
-    setTesting(true);
+    setTestingAI(prev => ({ ...prev, facebook: true }));
     try {
-      await testConnection();
-      toast.success("Connected to Prisma DB!");
+      const result = await testFacebookConnection(form.facebook_page_id, form.facebook_page_access_token);
+      setTestResults(prev => ({ ...prev, facebook: result }));
+      if (result.success) {
+        toast.success(`Facebook working: ${result.message}`);
+      } else {
+        toast.error(`Facebook failed: ${result.error}`);
+      }
     } catch (e: any) {
-      toast.error(e.message || "Connection test failed");
+      setTestResults(prev => ({ ...prev, facebook: { success: false, error: e.message } }));
+      toast.error(`Facebook test failed: ${e.message}`);
     } finally {
-      setTesting(false);
+      setTestingAI(prev => ({ ...prev, facebook: false }));
     }
   };
 
@@ -150,7 +158,7 @@ export default function SettingsPage() {
               id="page_id"
               value={form.facebook_page_id}
               onChange={(e) => setForm({ ...form, facebook_page_id: e.target.value })}
-              placeholder="Enter Facebook Page ID"
+              placeholder="61586953905789"
             />
           </div>
           <div className="space-y-2">
@@ -163,8 +171,8 @@ export default function SettingsPage() {
               placeholder="Enter Page Access Token"
             />
           </div>
-          <Button variant="outline" size="sm" onClick={testConnection} disabled={testing}>
-            {testing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+          <Button variant="outline" size="sm" onClick={testFacebookConnectionUI} disabled={testingAI.facebook}>
+            {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
             Test Facebook Connection
           </Button>
         </div>
@@ -190,7 +198,7 @@ export default function SettingsPage() {
                 id="hf_model"
                 value={form.hf_model}
                 onChange={(e) => setForm({ ...form, hf_model: e.target.value })}
-                placeholder="gpt2"
+                placeholder="mistralai/Mistral-7B-Instruct-v0.2"
               />
             </div>
           </div>
@@ -296,6 +304,41 @@ export default function SettingsPage() {
                   disabled={testingAI.rss}
                 >
                   {testingAI.rss ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  Test
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  📘
+                </div>
+                <div>
+                  <div className="font-medium">Facebook Page</div>
+                  <div className="text-xs text-muted-foreground">{form.facebook_page_id || "No Page ID set"}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {testResults.facebook && (
+                  <div className="flex items-center gap-1">
+                    {testResults.facebook.success ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                    <span className="text-xs">
+                      {testResults.facebook.success ? "Working" : "Failed"}
+                    </span>
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={testFacebookConnectionUI}
+                  disabled={testingAI.facebook || !form.facebook_page_id || !form.facebook_page_access_token}
+                >
+                  {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
                   Test
                 </Button>
               </div>

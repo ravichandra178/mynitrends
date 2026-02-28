@@ -411,6 +411,53 @@ async function handleTestConnection(req: Request): Promise<Response> {
   }
 }
 
+async function handleTestFacebookConnection(req: Request): Promise<Response> {
+  try {
+    const { pageId, accessToken } = await req.json();
+    
+    if (!pageId || !accessToken) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "Missing pageId or accessToken",
+        provider: "Facebook"
+      }), { status: 400, headers: corsHeaders });
+    }
+
+    console.log(`[TEST] Testing Facebook page connection for page: ${pageId}`);
+
+    // Test Facebook Graph API connection
+    const response = await fetch(`https://graph.facebook.com/v18.0/${pageId}?fields=name,id&access_token=${accessToken}`, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: error.error?.message || `HTTP ${response.status}`,
+        provider: "Facebook"
+      }), { status: 200, headers: corsHeaders });
+    }
+
+    const data = await response.json();
+    
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: `Connected to page: ${data.name}`,
+      pageName: data.name,
+      pageId: data.id,
+      provider: "Facebook"
+    }), { headers: corsHeaders });
+  } catch (e) {
+    console.error("TEST Facebook error:", e);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: e instanceof Error ? e.message : String(e),
+      provider: "Facebook"
+    }), { status: 500, headers: corsHeaders });
+  }
+}
+
 async function handleTestGROQ(req: Request): Promise<Response> {
   try {
     const { model } = await req.json();
@@ -475,7 +522,7 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
   try {
     const { model } = await req.json();
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
-    const hfModel = model || Deno.env.get("HF_TEXT_MODEL") || "gpt2";
+    const hfModel = model || Deno.env.get("HF_TEXT_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2";
 
     if (!hfApiKey) {
       return new Response(JSON.stringify({ 
@@ -488,7 +535,7 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
 
     console.log(`[TEST] Testing Hugging Face API with model: ${hfModel}`);
 
-    const response = await fetch(`https://api-inference.huggingface.co/models/${hfModel}`, {
+    const response = await fetch(`https://router.huggingface.co/hf-inference/models/${hfModel}`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${hfApiKey}`,
@@ -763,6 +810,7 @@ Deno.serve(async (req) => {
     if (path === "/api/post-to-facebook" && method === "POST") return await handlePostToFacebook(req);
     if (path === "/api/fetch-engagement" && method === "POST") return await handleFetchEngagement(req);
     if (path === "/api/test-connection" && method === "POST") return await handleTestConnection(req);
+    if (path === "/api/test-facebook-connection" && method === "POST") return await handleTestFacebookConnection(req);
     if (path === "/api/test-groq" && method === "POST") return await handleTestGROQ(req);
     if (path === "/api/test-huggingface" && method === "POST") return await handleTestHuggingFace(req);
     if (path === "/api/test-rss" && method === "POST") return await handleTestRSS(req);
