@@ -47,7 +47,7 @@ export default function SettingsPage() {
         auto_post_enabled: settings.auto_post_enabled ?? false,
         max_posts_per_day: settings.max_posts_per_day ?? 3,
         groq_model: "llama-3.1-8b-instant", // Default, will be overridden by env vars
-        hf_model: "meta-llama/Meta-Llama-3-8B-Instruct", // Default, will be overridden by env vars
+        hf_model: "Qwen/Qwen2.5-7B-Instruct", // Default, will be overridden by env vars
       });
     }
   }, [settings]);
@@ -198,7 +198,7 @@ export default function SettingsPage() {
                 id="hf_model"
                 value={form.hf_model}
                 onChange={(e) => setForm({ ...form, hf_model: e.target.value })}
-                placeholder="meta-llama/Meta-Llama-3-8B-Instruct"
+                placeholder="Qwen/Qwen2.5-7B-Instruct"
               />
             </div>
           </div>

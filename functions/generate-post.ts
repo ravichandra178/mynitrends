@@ -13,14 +13,15 @@ export async function generatePost(
   const hfModel = (Deno.env.get("HF_MODEL") || "deepgenteam/DeepGen-1.0").trim();
 
   // Generate post text using Hugging Face
-  const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "meta-llama/Meta-Llama-3-8B-Instruct").trim();
-  const hfTextRes = await fetch(`https://router.huggingface.co/hf-inference/models/${hfTextModel}/chat/completions`, {
+  const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "Qwen/Qwen2.5-7B-Instruct").trim();
+  const hfTextRes = await fetch(`https://router.huggingface.co/v1/chat/completions`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${hfApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      model: hfTextModel,
       messages: [
         {
           role: "user",
