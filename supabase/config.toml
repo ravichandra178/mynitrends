@@ -3,6 +3,9 @@ project_id = "tgrerzmimgjhlxuaohlm"
 [functions.generate-post]
 verify_jwt = false
 
+[functions.generate-trends]
+verify_jwt = false
+
 [functions.post-to-facebook]
 verify_jwt = false
 

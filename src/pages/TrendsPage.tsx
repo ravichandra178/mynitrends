@@ -8,11 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fetchTrends, addTrend } from "@/lib/supabase-helpers";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Sparkles, Loader2, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
-
-const API_BASE = (import.meta as any).env?.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 export default function TrendsPage() {
   const [newTopic, setNewTopic] = useState("");
@@ -37,12 +36,10 @@ export default function TrendsPage() {
   const handleGenerate = async (trendId: string, topic: string) => {
     setGeneratingId(trendId);
     try {
-      const response = await fetch(`${API_BASE}/api/generate-post`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trendId, topic }),
+      const { data, error } = await supabase.functions.invoke("generate-post", {
+        body: { trendId, topic },
       });
-      if (!response.ok) throw new Error('Failed to generate post');
+      if (error) throw error;
       toast.success("Post generated successfully");
       queryClient.invalidateQueries({ queryKey: ["trends"] });
       queryClient.invalidateQueries({ queryKey: ["posts"] });
@@ -56,14 +53,10 @@ export default function TrendsPage() {
   const handleFetchTrends = async () => {
     setFetchingTrends(true);
     try {
-      const response = await fetch(`${API_BASE}/api/generate-trends`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!response.ok) throw new Error('Failed to fetch trends');
-      const data = await response.json();
+      const { data, error } = await supabase.functions.invoke("generate-trends");
+      if (error) throw error;
       if (data?.added > 0) {
-        toast.success(`Added ${data.added} trending topics`);
+        toast.success(`Added ${data.added} trending topics (${data.source})`);
         queryClient.invalidateQueries({ queryKey: ["trends"] });
       } else {
         toast.info(data?.message || "No new trends found");
@@ -122,10 +115,10 @@ export default function TrendsPage() {
             ) : trends.length === 0 ? (
               <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No trends yet. Add one to get started.</TableCell></TableRow>
             ) : (
-              trends.map((t) => (
+              trends.map((t: any) => (
                 <TableRow key={t.id}>
                   <TableCell className="font-medium">{t.topic}</TableCell>
-                  <TableCell><StatusBadge variant={t.source === "auto" ? "info" : "neutral"}>{t.source}</StatusBadge></TableCell>
+                  <TableCell><StatusBadge variant={t.source === "AI" || t.source === "auto" ? "info" : "neutral"}>{t.source}</StatusBadge></TableCell>
                   <TableCell>
                     <StatusBadge variant={t.used ? "success" : "warning"}>{t.used ? "Used" : "Available"}</StatusBadge>
                   </TableCell>
