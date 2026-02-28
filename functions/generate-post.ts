@@ -13,8 +13,8 @@ export async function generatePost(
   const hfModel = (Deno.env.get("HF_MODEL") || "deepgenteam/DeepGen-1.0").trim();
 
   // Generate post text using Hugging Face
-  const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "gpt2").trim();
-  const hfTextRes = await fetch(`https://api-inference.huggingface.co/models/${hfTextModel}`, {
+  const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "distilgpt2").trim();
+  const hfTextRes = await fetch(`https://router.huggingface.co/hf-inference/models/${hfTextModel}`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${hfApiKey}`,

@@ -522,7 +522,7 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
   try {
     const { model } = await req.json();
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
-    const hfModel = model || Deno.env.get("HF_TEXT_MODEL") || "gpt2";
+    const hfModel = model || Deno.env.get("HF_TEXT_MODEL") || "distilgpt2";
 
     if (!hfApiKey) {
       return new Response(JSON.stringify({ 
@@ -535,7 +535,7 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
 
     console.log(`[TEST] Testing Hugging Face API with model: ${hfModel}`);
 
-    const response = await fetch(`https://api-inference.huggingface.co/models/${hfModel}`, {
+    const response = await fetch(`https://router.huggingface.co/hf-inference/models/${hfModel}`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${hfApiKey}`,
