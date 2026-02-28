@@ -268,12 +268,12 @@ async function handleGenerateTrends(req: Request): Promise<Response> {
 
     console.log("🔄 Generating trends...");
     const startTime = Date.now();
-    const trends = await generateTrends(dbUrl, groqApiKey, hfApiKey);
+    const trends: any = await generateTrends(dbUrl, groqApiKey, hfApiKey);
     const duration = Date.now() - startTime;
     
     console.log(`✅ Trends generated successfully (${duration}ms)`);
-    console.log(`📈 Total trends: ${trends.length}`);
-    trends.forEach((t: any, i: number) => {
+    console.log(`📈 Total trends: ${trends.count}`);
+    trends.trends.forEach((t: any, i: number) => {
       console.log(`   [${i + 1}] ${t.topic} (source: ${t.source})`);
     });
 
