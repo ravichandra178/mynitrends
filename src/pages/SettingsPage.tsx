@@ -23,7 +23,7 @@ export default function SettingsPage() {
     auto_post_enabled: false,
     max_posts_per_day: 3,
     groq_model: "llama-3.1-8b-instant",
-    hf_model: "microsoft/DialoGPT-medium",
+    hf_model: "gpt2",
   });
   const [testing, setTesting] = useState(false);
   const [testingAI, setTestingAI] = useState({
@@ -190,7 +190,7 @@ export default function SettingsPage() {
                 id="hf_model"
                 value={form.hf_model}
                 onChange={(e) => setForm({ ...form, hf_model: e.target.value })}
-                placeholder="microsoft/DialoGPT-medium"
+                placeholder="gpt2"
               />
             </div>
           </div>
