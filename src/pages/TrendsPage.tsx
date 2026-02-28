@@ -55,18 +55,42 @@ export default function TrendsPage() {
   const handleFetchTrends = async () => {
     setFetchingTrends(true);
     try {
-      console.log("[TrendsPage] Invoking generate-trends...");
+      console.log("%c[TrendsPage] 🔵 Invoking generate-trends API...", "color: blue; font-weight: bold;");
+      const startTime = performance.now();
+      
       const { data, error } = await supabase.functions.invoke("generate-trends");
-      console.log("[TrendsPage] generate-trends response:", data, "error:", error);
-      if (error) throw error;
+      const duration = (performance.now() - startTime).toFixed(2);
+      
+      console.log("%c[API RESPONSE]", "color: green; font-weight: bold; font-size: 14px;");
+      console.table(data);
+      console.log("%cDuration: " + duration + "ms", "color: orange;");
+      console.log("%cFull Response Object:", "color: purple;");
+      console.log(data);
+      console.log("%cError:", "color: red;");
+      console.log(error);
+      
+      if (error) {
+        console.error("%c[TrendsPage] ❌ Error from API:", "color: red; font-weight: bold;", error);
+        throw error;
+      }
+      
       if (data?.added > 0) {
+        console.log(`%c✅ Success! Added ${data.added} topics from ${data.source}`, "color: green; font-weight: bold;");
+        console.log("%cTopics added:", "color: blue;", data.topics);
         toast.success(`Added ${data.added} trending topics (${data.source})`);
         queryClient.invalidateQueries({ queryKey: ["trends"] });
       } else {
+        console.log("%c⚠️ No new trends added", "color: orange; font-weight: bold;");
+        console.log(data?.message);
         toast.info(data?.message || "No new trends found");
       }
     } catch (e: any) {
-      console.error("[TrendsPage] generate-trends failed:", e);
+      console.error("%c[TrendsPage] ❌ generate-trends failed:", "color: red; font-weight: bold;", e);
+      console.log("Error details:", {
+        message: e.message,
+        stack: e.stack,
+        fullError: e
+      });
       toast.error(e.message || "Failed to fetch trends");
     } finally {
       setFetchingTrends(false);
