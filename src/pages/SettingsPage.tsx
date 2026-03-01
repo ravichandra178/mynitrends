@@ -31,12 +31,14 @@ export default function SettingsPage() {
     huggingface: false,
     rss: false,
     facebook: false,
+    generatePost: false,
   });
   const [testResults, setTestResults] = useState({
     groq: null as any,
     huggingface: null as any,
     rss: null as any,
     facebook: null as any,
+    generatePost: null as any,
   });
 
   useEffect(() => {
@@ -126,21 +128,26 @@ export default function SettingsPage() {
     }
   };
 
-  const testRSSConnection = async () => {
-    setTestingAI(prev => ({ ...prev, rss: true }));
+  const testGeneratePost = async () => {
+    setTestingAI(prev => ({ ...prev, generatePost: true }));
     try {
-      const result = await testRSS();
-      setTestResults(prev => ({ ...prev, rss: result }));
+      const response = await fetch(`${API_BASE}/api/test-generate-post`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic: "artificial intelligence trends" }),
+      });
+      const result = await response.json();
+      setTestResults(prev => ({ ...prev, generatePost: result }));
       if (result.success) {
-        toast.success(`RSS working: ${result.message}`);
+        toast.success(`Post generation working: "${result.postText?.substring(0, 50)}..."`);
       } else {
-        toast.error(`RSS failed: ${result.error}`);
+        toast.error(`Post generation failed: ${result.error}`);
       }
     } catch (e: any) {
-      setTestResults(prev => ({ ...prev, rss: { success: false, error: e.message } }));
-      toast.error(`RSS test failed: ${e.message}`);
+      setTestResults(prev => ({ ...prev, generatePost: { success: false, error: e.message } }));
+      toast.error(`Post generation test failed: ${e.message}`);
     } finally {
-      setTestingAI(prev => ({ ...prev, rss: false }));
+      setTestingAI(prev => ({ ...prev, generatePost: false }));
     }
   };
 
@@ -339,6 +346,41 @@ export default function SettingsPage() {
                   disabled={testingAI.facebook || !form.facebook_page_id || !form.facebook_page_access_token}
                 >
                   {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  Test
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                  ✍️
+                </div>
+                <div>
+                  <div className="font-medium">Post Generation</div>
+                  <div className="text-xs text-muted-foreground">GROQ → Hugging Face fallback</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {testResults.generatePost && (
+                  <div className="flex items-center gap-1">
+                    {testResults.generatePost.success ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                    <span className="text-xs">
+                      {testResults.generatePost.success ? "Working" : "Failed"}
+                    </span>
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={testGeneratePost}
+                  disabled={testingAI.generatePost}
+                >
+                  {testingAI.generatePost ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
                   Test
                 </Button>
               </div>

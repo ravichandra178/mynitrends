@@ -1,1 +1,8 @@
-Not Found
+{
+  "error": {
+    "message": "Billing hard limit has been reached",
+    "type": "image_generation_user_error",
+    "param": null,
+    "code": "billing_hard_limit_reached"
+  }
+}
