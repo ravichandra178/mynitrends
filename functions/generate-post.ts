@@ -79,57 +79,47 @@ Just the post text.`
   // Generate image using working free tier models
   let imageUrl = null;
   const primaryModel = (Deno.env.get("HF_MODEL") || "runwayml/stable-diffusion-v1-5").trim();
-  const imageModels = [
-    primaryModel,
-    "runwayml/stable-diffusion-v1-5",
-    "stabilityai/stable-diffusion-xl-base-1.0",
-    "CompVis/stable-diffusion-v1-4",
-  ];
   
   console.log(`[IMAGE] Starting image generation for topic: "${topic}"`);
   
-  for (const model of imageModels) {
-    try {
-      console.log(`[IMAGE] Trying model: ${model}`);
-      const imagePrompt = `Professional social media image for "${topic}". Modern, engaging, trendy design. High quality, clean background.`;
-      
-      const hfImageRes = await fetch(
-        `https://api-inference.huggingface.co/models/${model}`,
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${hfApiKey}`,
-            "Content-Type": "application/json",
+  try {
+    console.log(`[IMAGE] Using model: ${primaryModel}`);
+    const imagePrompt = `A beautiful landscape painting of mountains at sunrise`;
+    
+    const hfImageRes = await fetch(
+      `https://api-inference.huggingface.co/models/${primaryModel}`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${hfApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          inputs: imagePrompt,
+          options: {
+            use_cache: false,
           },
-          body: JSON.stringify({
-            inputs: imagePrompt,
-            options: {
-              wait_for_model: true,
-              use_cache: false,
-            },
-          }),
-          signal: AbortSignal.timeout(60000) // Increased timeout
-        }
-      );
-
-      if (hfImageRes.ok) {
-        const contentType = hfImageRes.headers.get("content-type");
-        if (contentType && contentType.startsWith("image/")) {
-          const imageBuffer = await hfImageRes.arrayBuffer();
-          const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
-          imageUrl = `data:${contentType};base64,${base64Image}`;
-          console.log(`[IMAGE] ✅ Success with ${model} (${imageBuffer.byteLength} bytes)`);
-          break;
-        } else {
-          console.log(`[IMAGE] ❌ Unexpected content type: ${contentType}`);
-        }
-      } else {
-        const errorText = await hfImageRes.text();
-        console.log(`[IMAGE] ❌ ${hfImageRes.status} from ${model}: ${errorText.substring(0, 100)}`);
+        }),
+        signal: AbortSignal.timeout(60000) // Increased timeout
       }
-    } catch (e) {
-      console.error(`[IMAGE] Error with ${model}:`, e);
+    );
+
+    if (hfImageRes.ok) {
+      const contentType = hfImageRes.headers.get("content-type");
+      if (contentType && contentType.startsWith("image/")) {
+        const imageBuffer = await hfImageRes.arrayBuffer();
+        const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+        imageUrl = `data:${contentType};base64,${base64Image}`;
+        console.log(`[IMAGE] ✅ Success with ${primaryModel} (${imageBuffer.byteLength} bytes)`);
+      } else {
+        console.log(`[IMAGE] ❌ Unexpected content type: ${contentType}`);
+      }
+    } else {
+      const errorText = await hfImageRes.text();
+      console.log(`[IMAGE] ❌ ${hfImageRes.status} from ${primaryModel}: ${errorText.substring(0, 100)}`);
     }
+  } catch (e) {
+    console.error(`[IMAGE] Error with ${primaryModel}:`, e);
   }
   
   if (!imageUrl) {
