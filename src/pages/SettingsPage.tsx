@@ -307,7 +307,7 @@ export default function SettingsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={testRSSConnection}
+                  onClick={testRSS}
                   disabled={testingAI.rss}
                 >
                   {testingAI.rss ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
