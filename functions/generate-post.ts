@@ -46,23 +46,30 @@ Just the post text.`
     let isTokenExpired = false;
     
     try {
-      const errorData = await hfTextRes.json();
-      const errorText = errorData.error || `HTTP ${hfTextRes.status}`;
-      errorMessage = `Hugging Face text generation error: ${errorText}`;
+      const errorText = await hfTextRes.text();  // Read body once
       
-      // Check for token expiration indicators
-      if (errorData.error && (
-        errorData.error.toLowerCase().includes('token') && 
-        (errorData.error.toLowerCase().includes('expired') || 
-         errorData.error.toLowerCase().includes('invalid') ||
-         errorData.error.toLowerCase().includes('unauthorized'))
-      )) {
-        isTokenExpired = true;
-        console.error(`[HF TOKEN EXPIRED] Hugging Face API token appears to be expired or invalid during post generation: ${errorData.error}`);
+      // Try to parse as JSON if possible
+      try {
+        const errorData = JSON.parse(errorText);
+        const apiError = errorData.error || errorText;
+        errorMessage = `Hugging Face text generation error: ${apiError}`;
+        
+        // Check for token expiration indicators
+        if (errorData.error && (
+          errorData.error.toLowerCase().includes('token') && 
+          (errorData.error.toLowerCase().includes('expired') || 
+           errorData.error.toLowerCase().includes('invalid') ||
+           errorData.error.toLowerCase().includes('unauthorized'))
+        )) {
+          isTokenExpired = true;
+          console.error(`[HF TOKEN EXPIRED] Hugging Face API token appears to be expired or invalid during post generation: ${errorData.error}`);
+        }
+      } catch (parseError) {
+        // If not JSON, use the raw text
+        errorMessage = `Hugging Face text generation error: ${errorText}`;
       }
     } catch (e) {
-      const errorText = await hfTextRes.text();
-      errorMessage = `Hugging Face text generation error: ${errorText}`;
+      errorMessage = `Hugging Face text generation error: Failed to read response`;
     }
     
     if (isTokenExpired) {
