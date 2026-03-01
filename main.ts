@@ -233,8 +233,8 @@ async function handleGeneratePost(req: Request): Promise<Response> {
 
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
     const dbUrl = getDatabaseUrl();
-    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "distilgpt2").trim();
-    const hfModel = (Deno.env.get("HF_MODEL") || "deepgenteam/DeepGen-1.0").trim();
+    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "Qwen/Qwen2.5-7B-Instruct").trim();
+    const hfModel = (Deno.env.get("HF_MODEL") || "runwayml/stable-diffusion-v1-5").trim();
     
     console.log("Generate post request - Text model:", hfTextModel, "Image model:", hfModel);
     
