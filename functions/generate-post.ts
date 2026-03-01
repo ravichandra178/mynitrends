@@ -57,8 +57,17 @@ Just the post text.`
         postText = groqData.choices?.[0]?.message?.content?.trim();
         console.log(`[TEXT] ✅ GROQ Success: Generated post (${postText?.length || 0} chars)`);
       } else {
-        const errorText = await groqRes.text();
-        console.log(`[TEXT] ❌ GROQ ${groqRes.status}: ${errorText.substring(0, 100)}`);
+        let errorMessage = `GROQ API error: HTTP ${groqRes.status}`;
+        
+        try {
+          const errorData = await groqRes.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          // If response is not JSON, use status text
+          errorMessage = groqRes.statusText || errorMessage;
+        }
+        
+        console.log(`[TEXT] ❌ GROQ ${groqRes.status}: ${errorMessage}`);
       }
     } catch (e) {
       console.error(`[TEXT] Error with GROQ:`, e);
@@ -190,8 +199,17 @@ Just the post text.`
         console.log(`[IMAGE] ❌ Unexpected content type: ${contentType}`);
       }
     } else {
-      const errorText = await hfImageRes.text();
-      console.log(`[IMAGE] ❌ ${hfImageRes.status} from ${primaryModel}: ${errorText.substring(0, 100)}`);
+      let errorMessage = `Image generation error: HTTP ${hfImageRes.status}`;
+      
+      try {
+        const errorData = await hfImageRes.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (e) {
+        // If response is not JSON, use status text
+        errorMessage = hfImageRes.statusText || errorMessage;
+      }
+      
+      console.log(`[IMAGE] ❌ ${hfImageRes.status} from ${primaryModel}: ${errorMessage}`);
     }
   } catch (e) {
     console.error(`[IMAGE] Error with ${primaryModel}:`, e);
