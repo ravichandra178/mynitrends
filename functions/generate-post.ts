@@ -12,7 +12,8 @@ export async function generatePost(
   }
 
   const groqModel = (Deno.env.get("GROQ_MODEL") || Deno.env.get("GROK_MODEL") || "llama-3.1-8b-instant").trim();
-  const hfModel = (Deno.env.get("HF_MODEL") || "runwayml/stable-diffusion-v1-5").trim();
+  const hfModel = (Deno.env.get("HF_MODEL") || "stabilityai/stable-diffusion-xl-base-1.0").trim();
+  const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "Qwen/Qwen2.5-7B-Instruct").trim();
 
   // Generate post text using GROQ API (primary) or Hugging Face (fallback)
   // Equivalent to: curl https://api.groq.com/openai/v1/chat/completions \
@@ -76,7 +77,7 @@ Just the post text.`
 
   // Fallback to Hugging Face if GROQ failed
   if (!postText && hfApiKey) {
-    console.log(`[TEXT] 🟠 FALLBACK: Using Hugging Face API with model: Qwen/Qwen2.5-7B-Instruct`);
+    console.log(`[TEXT] 🟠 FALLBACK: Using Hugging Face API with model: ${hfTextModel}`);
     usedApi = "Hugging Face";
     
     try {
@@ -87,7 +88,7 @@ Just the post text.`
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "Qwen/Qwen2.5-7B-Instruct",
+          model: hfTextModel,
           messages: [
             {
               role: "user",
@@ -158,7 +159,7 @@ Just the post text.`
 
   // Generate image using Hugging Face Image Generation API
   let imageUrl = null;
-  const primaryModel = (Deno.env.get("HF_MODEL") || "runwayml/stable-diffusion-v1-5").trim();
+  const primaryModel = (Deno.env.get("HF_MODEL") || "stabilityai/stable-diffusion-xl-base-1.0").trim();
   
   console.log(`[IMAGE] Starting image generation for topic: "${topic}"`);
   
@@ -258,11 +259,11 @@ Return ONLY the prompt, nothing else.`
         console.log(`[IMAGE] ❌ ${hfImageRes.status} from ${primaryModel}: ${errorMessage}`);
 
         // Try fallback model if primary fails
-        if (primaryModel !== "runwayml/stable-diffusion-v1-5") {
-          console.log(`[IMAGE] 🔄 Trying fallback model: runwayml/stable-diffusion-v1-5`);
+        if (primaryModel !== "stabilityai/stable-diffusion-xl-base-1.0") {
+          console.log(`[IMAGE] 🔄 Trying fallback model: stabilityai/stable-diffusion-xl-base-1.0`);
           try {
             const fallbackRes = await fetch(
-              `https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5`,
+              `https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0`,
               {
                 method: "POST",
                 headers: {

@@ -234,8 +234,8 @@ async function handleGeneratePost(req: Request): Promise<Response> {
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
     const dbUrl = getDatabaseUrl();
     const groqApiKey = Deno.env.get("GROQ_API_KEY");
-    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2").trim();
-    const hfModel = (Deno.env.get("HF_MODEL") || "runwayml/stable-diffusion-v1-5").trim();
+    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "Qwen/Qwen2.5-7B-Instruct").trim();
+    const hfModel = (Deno.env.get("HF_MODEL") || "stabilityai/stable-diffusion-xl-base-1.0").trim();
     
     console.log("Generate post request - GROQ:", groqApiKey ? "✅" : "❌", "HF:", hfApiKey ? "✅" : "❌");
     console.log("Models - Text:", hfTextModel, "Image:", hfModel);
@@ -541,7 +541,7 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
   try {
     const { model } = await req.json();
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
-    const hfModel = model || Deno.env.get("HF_TEXT_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2";
+    const hfModel = model || Deno.env.get("HF_TEXT_MODEL") || "Qwen/Qwen2.5-7B-Instruct";
 
     if (!hfApiKey) {
       return new Response(JSON.stringify({ 
@@ -626,7 +626,7 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
 async function handleTestHFImage(req: Request): Promise<Response> {
   try {
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
-    const hfModel = (Deno.env.get("HF_MODEL") || "runwayml/stable-diffusion-v1-5").trim();
+    const hfModel = (Deno.env.get("HF_MODEL") || "stabilityai/stable-diffusion-xl-base-1.0").trim();
 
     if (!hfApiKey) {
       return new Response(JSON.stringify({ 
@@ -723,7 +723,7 @@ async function handleTestHFImage(req: Request): Promise<Response> {
 async function handleTestHFTrends(req: Request): Promise<Response> {
   try {
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
-    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2").trim();
+    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "Qwen/Qwen2.5-7B-Instruct").trim();
 
     if (!hfApiKey) {
       return new Response(JSON.stringify({ 
@@ -920,6 +920,7 @@ async function handleTestGeneratePost(req: Request): Promise<Response> {
     const groqApiKey = Deno.env.get("GROQ_API_KEY");
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
     const groqModel = (Deno.env.get("GROQ_MODEL") || Deno.env.get("GROK_MODEL") || "llama-3.1-8b-instant").trim();
+    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "Qwen/Qwen2.5-7B-Instruct").trim();
 
     if (!groqApiKey && !hfApiKey) {
       return new Response(JSON.stringify({ 
@@ -980,7 +981,7 @@ Just the post text.`
 
     // Fallback to Hugging Face if GROQ failed
     if (!postText && hfApiKey) {
-      console.log(`[TEST] 🟠 FALLBACK: Using Hugging Face API`);
+      console.log(`[TEST] 🟠 FALLBACK: Using Hugging Face API with model: ${hfTextModel}`);
       usedApi = "Hugging Face";
       
       try {
@@ -991,7 +992,7 @@ Just the post text.`
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "Qwen/Qwen2.5-7B-Instruct",
+            model: hfTextModel,
             messages: [
               {
                 role: "user",

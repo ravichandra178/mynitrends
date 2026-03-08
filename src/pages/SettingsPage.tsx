@@ -23,7 +23,7 @@ export default function SettingsPage() {
     auto_post_enabled: false,
     max_posts_per_day: 3,
     groq_model: "llama-3.1-8b-instant",
-    hf_model: "mistralai/Mistral-7B-Instruct-v0.2",
+    hf_model: "Qwen/Qwen2.5-7B-Instruct",
   });
   const [testing, setTesting] = useState(false);
   const [testingAI, setTestingAI] = useState({
@@ -359,7 +359,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <div className="font-medium">HF Image Generation</div>
-                  <div className="text-xs text-muted-foreground">runwayml/stable-diffusion-v1-5</div>
+                  <div className="text-xs text-muted-foreground">HF_MODEL env var</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">

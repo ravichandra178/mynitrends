@@ -162,7 +162,7 @@ If output is not valid JSON, regenerate until valid.`
 
 export async function generateTrends(dbUrl: string, groqApiKey: string, hfApiKey?: string): Promise<any> {
   const groqModel = (Deno.env.get("GROQ_MODEL") || Deno.env.get("GROK_MODEL") || "llama-3.1-8b-instant").trim();
-  const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2").trim();
+  const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "Qwen/Qwen2.5-7B-Instruct").trim();
 
   let trendsData: any[] = [];
   let appliedMethod = "";
