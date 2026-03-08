@@ -151,7 +151,11 @@ export async function fetchSettings() {
     }
     const data = await response.json();
     console.log("[API] ✅ Settings fetched:", data);
-    return data[0] || {};
+    // API returns a single object, handle both object and array formats
+    if (Array.isArray(data)) {
+      return data[0] || {};
+    }
+    return data || {};
   } catch (e) {
     console.error("[API] ❌ Failed to fetch settings:", e);
     throw new Error("Failed to fetch settings");

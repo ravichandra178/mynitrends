@@ -161,7 +161,7 @@ If output is not valid JSON, regenerate until valid.`
 }
 
 export async function generateTrends(dbUrl: string, groqApiKey: string, hfApiKey?: string): Promise<any> {
-  const groqModel = (Deno.env.get("GROQ_MODEL") || "llama-3.1-8b-instant").trim();
+  const groqModel = (Deno.env.get("GROQ_MODEL") || Deno.env.get("GROK_MODEL") || "llama-3.1-8b-instant").trim();
   const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2").trim();
 
   let trendsData: any[] = [];
@@ -195,7 +195,7 @@ Return ONLY valid JSON array, nothing else.`;
 
     console.log(`[TRENDS] 📊 Hybrid results - GROQ: ${groqTrends.length}, HF: ${hfTrends.length}, RSS: ${rssTrends.length}`);
 
-    // Hybrid succeeds only if ALL 3 sources returned results
+    // Perfect hybrid: all 3 sources returned enough
     if (groqTrends.length >= 2 && hfTrends.length >= 2 && rssTrends.length >= 1) {
       trendsData = [
         ...groqTrends.slice(0, 2),
@@ -205,9 +205,22 @@ Return ONLY valid JSON array, nothing else.`;
       appliedMethod = "Hybrid (GROQ+HF+RSS)";
       usedModel = `${groqModel} + ${hfTextModel} + RSS`;
       console.log(`[TRENDS] ✅ HYBRID SUCCESS: 2 GROQ + 2 HF + 1 RSS = ${trendsData.length} trends`);
-      console.log(`[TRENDS] 📋 Hybrid Trends:`, trendsData.map(t => `"${t.trend}" (${t.source})`).join(", "));
+    }
+    // Partial hybrid: combine whatever we got from all sources
+    else if (groqTrends.length > 0 || hfTrends.length > 0 || rssTrends.length > 0) {
+      const combined = [...groqTrends.slice(0, 2), ...hfTrends.slice(0, 2), ...rssTrends.slice(0, 1)];
+      if (combined.length > 0) {
+        trendsData = combined;
+        const sources = [];
+        if (groqTrends.length > 0) sources.push(`GROQ(${groqTrends.slice(0, 2).length})`);
+        if (hfTrends.length > 0) sources.push(`HF(${hfTrends.slice(0, 2).length})`);
+        if (rssTrends.length > 0) sources.push(`RSS(${rssTrends.slice(0, 1).length})`);
+        appliedMethod = `Partial Hybrid (${sources.join("+")})`;
+        usedModel = `${groqModel} + ${hfTextModel} + RSS`;
+        console.log(`[TRENDS] ⚠️ PARTIAL HYBRID: ${sources.join(" + ")} = ${trendsData.length} trends`);
+      }
     } else {
-      console.log(`[TRENDS] ⚠️ HYBRID INCOMPLETE: Not all 3 sources returned enough results, falling back...`);
+      console.log(`[TRENDS] ❌ HYBRID FAILED: No sources returned results, falling back...`);
     }
   } else {
     console.log(`[TRENDS] ⏭️ Skipping Hybrid: Need both GROQ & HF keys`);

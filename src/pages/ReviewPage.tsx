@@ -7,11 +7,20 @@ import { fetchSettings, fetchPosts } from "@/lib/api-helpers";
 import { CheckCircle, XCircle, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
 
+const API_BASE = '';
 const FLOW_STEPS = ["Trend Detected", "Post Generated", "Image Generated", "Scheduled", "Published", "Engagement Synced"];
 
 export default function ReviewPage() {
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
   const { data: posts = [] } = useQuery({ queryKey: ["posts"], queryFn: fetchPosts });
+  const { data: systemStatus } = useQuery({
+    queryKey: ["system-status"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/system-status`);
+      if (!res.ok) throw new Error("Failed to fetch system status");
+      return res.json();
+    },
+  });
 
   const publishedPosts = posts.filter((p: any) => p.posted);
   const lastPublished = publishedPosts[0];
@@ -29,7 +38,8 @@ export default function ReviewPage() {
   });
   activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-  const isConnected = !!settings?.facebook_page_id && !!settings?.facebook_page_access_token;
+  const isConnected = !!systemStatus?.facebook?.connected;
+  const isVerified = !!systemStatus?.facebook?.verified;
 
   return (
     <Layout>
@@ -41,10 +51,13 @@ export default function ReviewPage() {
         <div className="space-y-2 text-sm">
           <div className="flex items-center gap-2">
             {isConnected ? <CheckCircle className="h-4 w-4 text-badge-success" /> : <XCircle className="h-4 w-4 text-destructive" />}
-            <span>Status: {isConnected ? "Connected" : "Not Connected"}</span>
+            <span>Status: {isVerified ? "Connected & Verified" : isConnected ? "Connected (Keys Set)" : "Not Connected"}</span>
           </div>
-          {settings?.facebook_page_id && (
-            <p className="text-muted-foreground">Page ID: {settings.facebook_page_id}</p>
+          {systemStatus?.facebook?.pageName && (
+            <p className="text-muted-foreground">Page: {systemStatus.facebook.pageName}</p>
+          )}
+          {systemStatus?.facebook?.pageId && (
+            <p className="text-muted-foreground">Page ID: {systemStatus.facebook.pageId}</p>
           )}
           {lastPublished && (
             <p className="text-muted-foreground">Last published: {format(new Date(lastPublished.created_at), "MMM d, yyyy h:mm a")}</p>
@@ -54,6 +67,20 @@ export default function ReviewPage() {
             <div className="flex gap-2 mt-1">
               <StatusBadge variant="info">pages_manage_posts</StatusBadge>
               <StatusBadge variant="info">pages_read_engagement</StatusBadge>
+            </div>
+          </div>
+          <div className="mt-2">
+            <p className="text-xs text-muted-foreground font-medium">API Keys:</p>
+            <div className="flex gap-2 mt-1 flex-wrap">
+              <StatusBadge variant={systemStatus?.groq?.connected ? "success" : "neutral"}>
+                GROQ: {systemStatus?.groq?.connected ? "✅" : "❌"}
+              </StatusBadge>
+              <StatusBadge variant={systemStatus?.huggingface?.connected ? "success" : "neutral"}>
+                HF: {systemStatus?.huggingface?.connected ? "✅" : "❌"}
+              </StatusBadge>
+              <StatusBadge variant={isConnected ? "success" : "neutral"}>
+                Facebook: {isConnected ? "✅" : "❌"}
+              </StatusBadge>
             </div>
           </div>
         </div>

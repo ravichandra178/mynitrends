@@ -234,7 +234,7 @@ async function handleGeneratePost(req: Request): Promise<Response> {
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
     const dbUrl = getDatabaseUrl();
     const groqApiKey = Deno.env.get("GROQ_API_KEY");
-    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "Qwen/Qwen2.5-7B-Instruct").trim();
+    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2").trim();
     const hfModel = (Deno.env.get("HF_MODEL") || "runwayml/stable-diffusion-v1-5").trim();
     
     console.log("Generate post request - GROQ:", groqApiKey ? "✅" : "❌", "HF:", hfApiKey ? "✅" : "❌");
@@ -481,7 +481,7 @@ async function handleTestGROQ(req: Request): Promise<Response> {
   try {
     const { model } = await req.json();
     const groqApiKey = Deno.env.get("GROQ_API_KEY");
-    const groqModel = model || Deno.env.get("GROQ_MODEL") || "llama-3.1-8b-instant";
+    const groqModel = model || Deno.env.get("GROQ_MODEL") || Deno.env.get("GROK_MODEL") || "llama-3.1-8b-instant";
 
     if (!groqApiKey) {
       return new Response(JSON.stringify({ 
@@ -541,7 +541,7 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
   try {
     const { model } = await req.json();
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
-    const hfModel = model || Deno.env.get("HF_TEXT_MODEL") || "Qwen/Qwen2.5-7B-Instruct";
+    const hfModel = model || Deno.env.get("HF_TEXT_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2";
 
     if (!hfApiKey) {
       return new Response(JSON.stringify({ 
@@ -664,12 +664,59 @@ async function handleTestRSS(req: Request): Promise<Response> {
   }
 }
 
+async function handleSystemStatus(req: Request): Promise<Response> {
+  try {
+    const fbPageId = Deno.env.get("FACEBOOK_PAGE_ID") || "";
+    const fbToken = Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") || "";
+    const groqKey = Deno.env.get("GROQ_API_KEY") || "";
+    const hfKey = Deno.env.get("HUGGINGFACE_API_KEY") || "";
+
+    const fbConnected = !!fbPageId && !!fbToken;
+
+    // Optionally verify Facebook connection is live
+    let fbVerified = false;
+    let fbPageName = "";
+    if (fbConnected) {
+      try {
+        const fbRes = await fetch(`https://graph.facebook.com/${fbPageId}?fields=name,id&access_token=${fbToken}`, {
+          signal: AbortSignal.timeout(5000),
+        });
+        if (fbRes.ok) {
+          const fbData = await fbRes.json();
+          if (!fbData.error) {
+            fbVerified = true;
+            fbPageName = fbData.name || "";
+          }
+        }
+      } catch (_) {
+        // Verification failed, but keys exist
+      }
+    }
+
+    return new Response(JSON.stringify({
+      facebook: {
+        connected: fbConnected,
+        verified: fbVerified,
+        pageId: fbPageId || null,
+        pageName: fbPageName || null,
+      },
+      groq: { connected: !!groqKey },
+      huggingface: { connected: !!hfKey },
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  } catch (e) {
+    console.error("GET /api/system-status error:", e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
+      status: 500, headers: corsHeaders,
+    });
+  }
+}
+
 async function handleTestGeneratePost(req: Request): Promise<Response> {
   try {
     const { topic } = await req.json();
     const groqApiKey = Deno.env.get("GROQ_API_KEY");
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
-    const groqModel = (Deno.env.get("GROQ_MODEL") || "llama-3.1-8b-instant").trim();
+    const groqModel = (Deno.env.get("GROQ_MODEL") || Deno.env.get("GROK_MODEL") || "llama-3.1-8b-instant").trim();
 
     if (!groqApiKey && !hfApiKey) {
       return new Response(JSON.stringify({ 
@@ -982,6 +1029,7 @@ Deno.serve(async (req) => {
     if (path === "/api/test-huggingface" && method === "POST") return await handleTestHuggingFace(req);
     if (path === "/api/test-rss" && method === "POST") return await handleTestRSS(req);
     if (path === "/api/test-generate-post" && method === "POST") return await handleTestGeneratePost(req);
+    if (path === "/api/system-status" && method === "GET") return await handleSystemStatus(req);
   } catch (e) {
     console.error(`Error handling ${method} ${path}:`, e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {

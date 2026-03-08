@@ -11,7 +11,7 @@ export async function generatePost(
     throw new Error("GROQ_API_KEY or HUGGINGFACE_API_KEY not configured");
   }
 
-  const groqModel = (Deno.env.get("GROQ_MODEL") || "llama-3.1-8b-instant").trim();
+  const groqModel = (Deno.env.get("GROQ_MODEL") || Deno.env.get("GROK_MODEL") || "llama-3.1-8b-instant").trim();
   const hfModel = (Deno.env.get("HF_MODEL") || "runwayml/stable-diffusion-v1-5").trim();
 
   // Generate post text using GROQ API (primary) or Hugging Face (fallback)
@@ -157,62 +157,145 @@ Just the post text.`
   }
 
   // Generate image using Hugging Face Image Generation API
-  // Equivalent to: curl -X POST https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5 \
-  //   -H "Authorization: Bearer $HUGGINGFACE_API_KEY" \
-  //   -H "Content-Type: application/json" \
-  //   -d '{"inputs": "A beautiful landscape painting of mountains at sunrise", "options": {"use_cache": false}}' > output.bin
   let imageUrl = null;
   const primaryModel = (Deno.env.get("HF_MODEL") || "runwayml/stable-diffusion-v1-5").trim();
   
   console.log(`[IMAGE] Starting image generation for topic: "${topic}"`);
   
-  try {
-    console.log(`[IMAGE] Using model: ${primaryModel}`);
-    const imagePrompt = `A beautiful landscape painting of mountains at sunrise`;
+  if (hfApiKey) {
+    // First, generate a good image prompt from the post content using AI
+    let imagePrompt = `Professional social media graphic about ${topic}, modern design, vibrant colors, clean layout`;
     
-    const hfImageRes = await fetch(
-      `https://api-inference.huggingface.co/models/${primaryModel}`,
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${hfApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          inputs: imagePrompt,
-          options: {
-            use_cache: false,
-          },
-        }),
-        signal: AbortSignal.timeout(60000) // Increased timeout
-      }
-    );
-
-    if (hfImageRes.ok) {
-      const contentType = hfImageRes.headers.get("content-type");
-      if (contentType && contentType.startsWith("image/")) {
-        const imageBuffer = await hfImageRes.arrayBuffer();
-        const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
-        imageUrl = `data:${contentType};base64,${base64Image}`;
-        console.log(`[IMAGE] ✅ Success with ${primaryModel} (${imageBuffer.byteLength} bytes)`);
-      } else {
-        console.log(`[IMAGE] ❌ Unexpected content type: ${contentType}`);
-      }
-    } else {
-      let errorMessage = `Image generation error: HTTP ${hfImageRes.status}`;
-      
+    // Try to get a better image prompt from GROQ
+    if (groqApiKey) {
       try {
-        const errorData = await hfImageRes.json();
-        errorMessage = errorData.error || errorMessage;
+        console.log(`[IMAGE] Generating optimized image prompt from GROQ...`);
+        const promptRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${groqApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: groqModel,
+            messages: [
+              {
+                role: "user",
+                content: `Generate a short image description (max 50 words) for an AI image generator to create a social media graphic for this post:
+"${postText}"
+Topic: ${topic}
+Style: Professional, modern, vibrant, suitable for Facebook.
+Return ONLY the image description, nothing else.`
+              }
+            ],
+            max_tokens: 80,
+            temperature: 0.6,
+          }),
+          signal: AbortSignal.timeout(8000)
+        });
+
+        if (promptRes.ok) {
+          const promptData = await promptRes.json();
+          const aiPrompt = promptData.choices?.[0]?.message?.content?.trim();
+          if (aiPrompt && aiPrompt.length > 10) {
+            imagePrompt = aiPrompt;
+            console.log(`[IMAGE] ✅ AI-generated prompt: "${imagePrompt}"`);
+          }
+        }
       } catch (e) {
-        // If response is not JSON, use status text
-        errorMessage = hfImageRes.statusText || errorMessage;
+        console.log(`[IMAGE] ⚠️ Prompt generation failed, using default prompt`);
       }
-      
-      console.log(`[IMAGE] ❌ ${hfImageRes.status} from ${primaryModel}: ${errorMessage}`);
     }
-  } catch (e) {
-    console.error(`[IMAGE] Error with ${primaryModel}:`, e);
+
+    try {
+      console.log(`[IMAGE] Using model: ${primaryModel}`);
+      console.log(`[IMAGE] Prompt: "${imagePrompt}"`);
+      
+      const hfImageRes = await fetch(
+        `https://api-inference.huggingface.co/models/${primaryModel}`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${hfApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            inputs: imagePrompt,
+            options: {
+              use_cache: false,
+            },
+          }),
+          signal: AbortSignal.timeout(60000)
+        }
+      );
+
+      if (hfImageRes.ok) {
+        const contentType = hfImageRes.headers.get("content-type");
+        if (contentType && contentType.startsWith("image/")) {
+          const imageBuffer = await hfImageRes.arrayBuffer();
+          const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+          imageUrl = `data:${contentType};base64,${base64Image}`;
+          console.log(`[IMAGE] ✅ Success with ${primaryModel} (${imageBuffer.byteLength} bytes)`);
+        } else {
+          console.log(`[IMAGE] ❌ Unexpected content type: ${contentType}`);
+          const body = await hfImageRes.text();
+          console.log(`[IMAGE] Response body: ${body.substring(0, 200)}`);
+        }
+      } else {
+        let errorMessage = `Image generation error: HTTP ${hfImageRes.status}`;
+        
+        try {
+          const errorData = await hfImageRes.json();
+          errorMessage = errorData.error || JSON.stringify(errorData);
+        } catch (e) {
+          try {
+            errorMessage = await hfImageRes.text();
+          } catch (_) {}
+        }
+        
+        console.log(`[IMAGE] ❌ ${hfImageRes.status} from ${primaryModel}: ${errorMessage}`);
+
+        // Try fallback model if primary fails
+        if (primaryModel !== "runwayml/stable-diffusion-v1-5") {
+          console.log(`[IMAGE] 🔄 Trying fallback model: runwayml/stable-diffusion-v1-5`);
+          try {
+            const fallbackRes = await fetch(
+              `https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5`,
+              {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${hfApiKey}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  inputs: imagePrompt,
+                  options: { use_cache: false },
+                }),
+                signal: AbortSignal.timeout(60000)
+              }
+            );
+
+            if (fallbackRes.ok) {
+              const ct = fallbackRes.headers.get("content-type");
+              if (ct && ct.startsWith("image/")) {
+                const buf = await fallbackRes.arrayBuffer();
+                const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+                imageUrl = `data:${ct};base64,${b64}`;
+                console.log(`[IMAGE] ✅ Fallback success (${buf.byteLength} bytes)`);
+              }
+            } else {
+              console.log(`[IMAGE] ❌ Fallback also failed: ${fallbackRes.status}`);
+            }
+          } catch (e) {
+            console.error(`[IMAGE] ❌ Fallback error:`, e);
+          }
+        }
+      }
+    } catch (e) {
+      console.error(`[IMAGE] Error with ${primaryModel}:`, e);
+    }
+  } else {
+    console.log("[IMAGE] ⏭️ Skipping image generation: No HF API key");
   }
   
   if (!imageUrl) {
