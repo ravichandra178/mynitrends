@@ -215,7 +215,7 @@ Return ONLY the prompt, nothing else.`
       console.log(`[IMAGE] Prompt: "${imagePrompt}"`);
       
       const hfImageRes = await fetch(
-        `https://api-inference.huggingface.co/models/${primaryModel}`,
+        `https://router.huggingface.co/hf-inference/models/${primaryModel}`,
         {
           method: "POST",
           headers: {
@@ -263,7 +263,7 @@ Return ONLY the prompt, nothing else.`
           console.log(`[IMAGE] 🔄 Trying fallback model: stabilityai/stable-diffusion-xl-base-1.0`);
           try {
             const fallbackRes = await fetch(
-              `https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0`,
+              `https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0`,
               {
                 method: "POST",
                 headers: {

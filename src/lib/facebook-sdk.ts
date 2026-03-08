@@ -1,7 +1,26 @@
-const FB_APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID || "";
+let FB_APP_ID = "";
 const FB_API_VERSION = "v21.0";
 
-export function initFacebookSDK(): Promise<void> {
+async function fetchAppId(): Promise<string> {
+  if (FB_APP_ID) return FB_APP_ID;
+  try {
+    const res = await fetch("/api/facebook-app-id");
+    const data = await res.json();
+    FB_APP_ID = data.appId || "";
+    return FB_APP_ID;
+  } catch (e) {
+    console.error("[FB SDK] Failed to fetch App ID:", e);
+    return "";
+  }
+}
+
+export async function initFacebookSDK(): Promise<void> {
+  const appId = await fetchAppId();
+  if (!appId) {
+    console.error("[FB SDK] ❌ No FACEBOOK_APP_ID configured");
+    throw new Error("FACEBOOK_APP_ID not configured in environment variables");
+  }
+
   return new Promise((resolve) => {
     if (window.FB) {
       resolve();
@@ -10,7 +29,7 @@ export function initFacebookSDK(): Promise<void> {
 
     window.fbAsyncInit = function () {
       window.FB.init({
-        appId: FB_APP_ID,
+        appId: appId,
         cookie: true,
         xfbml: true,
         version: FB_API_VERSION,

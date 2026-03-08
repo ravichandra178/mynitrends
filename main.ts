@@ -643,7 +643,7 @@ async function handleTestHFImage(req: Request): Promise<Response> {
     const imagePrompt = `Create a social media poster about: ${testTopic}, modern design, vibrant colors, trending topic, 4k, cinematic lighting`;
 
     const response = await fetch(
-      `https://api-inference.huggingface.co/models/${hfModel}`,
+      `https://router.huggingface.co/hf-inference/models/${hfModel}`,
       {
         method: "POST",
         headers: {
@@ -1236,6 +1236,10 @@ Deno.serve(async (req) => {
     if (path === "/api/test-rss" && method === "POST") return await handleTestRSS(req);
     if (path === "/api/test-generate-post" && method === "POST") return await handleTestGeneratePost(req);
     if (path === "/api/system-status" && method === "GET") return await handleSystemStatus(req);
+    if (path === "/api/facebook-app-id" && method === "GET") {
+      const appId = Deno.env.get("FACEBOOK_APP_ID") || "";
+      return new Response(JSON.stringify({ appId }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
   } catch (e) {
     console.error(`Error handling ${method} ${path}:`, e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {

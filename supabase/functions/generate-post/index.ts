@@ -56,7 +56,7 @@ Rules:
     try {
       const imagePrompt = `Facebook post image about ${topic}. Social media style, vibrant colors, modern design, engaging visual. Text: "${postContent.split("\n")[0]}"`;
       
-      const imageRes = await fetch("https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-3.5-large", {
+      const imageRes = await fetch("https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-3.5-large", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${huggingFaceApiKey}`,
