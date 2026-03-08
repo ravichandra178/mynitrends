@@ -623,6 +623,209 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
   }
 }
 
+async function handleTestHFImage(req: Request): Promise<Response> {
+  try {
+    const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
+    const hfModel = (Deno.env.get("HF_MODEL") || "runwayml/stable-diffusion-v1-5").trim();
+
+    if (!hfApiKey) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "HUGGINGFACE_API_KEY not configured",
+        model: hfModel,
+        provider: "HF Image Generation"
+      }), { status: 400, headers: corsHeaders });
+    }
+
+    console.log(`[TEST] Testing HF Image Generation with model: ${hfModel}`);
+
+    const testTopic = "AI trends transforming social media marketing";
+    const imagePrompt = `Create a social media poster about: ${testTopic}, modern design, vibrant colors, trending topic, 4k, cinematic lighting`;
+
+    const response = await fetch(
+      `https://api-inference.huggingface.co/models/${hfModel}`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${hfApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ inputs: imagePrompt }),
+        signal: AbortSignal.timeout(30000),
+      }
+    );
+
+    console.log(`[TEST] HF Image API Response: ${response.status} ${response.statusText}`);
+
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+        // Check for model loading status
+        if (errorData.estimated_time) {
+          errorMessage = `Model is loading (estimated ${Math.round(errorData.estimated_time)}s). Try again shortly.`;
+        }
+      } catch (_) {
+        errorMessage = response.statusText || errorMessage;
+      }
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: errorMessage,
+        model: hfModel,
+        provider: "HF Image Generation"
+      }), { status: 200, headers: corsHeaders });
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("image")) {
+      const imageBytes = await response.arrayBuffer();
+      const sizeKB = Math.round(imageBytes.byteLength / 1024);
+      console.log(`[TEST] ✅ HF Image Success: Generated ${sizeKB}KB image (${contentType})`);
+      
+      // Convert to base64 for preview
+      const uint8 = new Uint8Array(imageBytes);
+      let binary = "";
+      for (let i = 0; i < uint8.length; i++) {
+        binary += String.fromCharCode(uint8[i]);
+      }
+      const base64Image = btoa(binary);
+      const imageDataUrl = `data:${contentType};base64,${base64Image}`;
+
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: `Generated ${sizeKB}KB image successfully`,
+        model: hfModel,
+        provider: "HF Image Generation",
+        imageUrl: imageDataUrl,
+        sizeKB: sizeKB,
+        prompt: imagePrompt,
+      }), { headers: corsHeaders });
+    } else {
+      const text = await response.text();
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: `Unexpected response type: ${contentType}. Body: ${text.substring(0, 200)}`,
+        model: hfModel,
+        provider: "HF Image Generation"
+      }), { status: 200, headers: corsHeaders });
+    }
+  } catch (e) {
+    console.error("TEST HF Image error:", e);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: e instanceof Error ? e.message : String(e),
+      provider: "HF Image Generation"
+    }), { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleTestHFTrends(req: Request): Promise<Response> {
+  try {
+    const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
+    const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "mistralai/Mistral-7B-Instruct-v0.2").trim();
+
+    if (!hfApiKey) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "HUGGINGFACE_API_KEY not configured",
+        model: hfTextModel,
+        provider: "HF Trends Generation"
+      }), { status: 400, headers: corsHeaders });
+    }
+
+    console.log(`[TEST] Testing HF Trends Generation with model: ${hfTextModel}`);
+
+    const prompt = `Generate 3 latest social media trends relevant for India in 2026.
+Sources can be: Facebook, Instagram, YouTube, X, LinkedIn.
+Engagement score must be between 1 and 100.
+Return ONLY valid JSON array, nothing else.`;
+
+    const response = await fetch("https://router.huggingface.co/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${hfApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: hfTextModel,
+        messages: [
+          {
+            role: "system",
+            content: `You are a trends generation API.
+Return ONLY valid JSON.
+Do NOT include explanations, markdown, or backticks.
+Output must be a valid JSON array.
+Each item must follow this exact format:
+{
+  "trend": "string",
+  "source": "string",
+  "category": "string",
+  "engagement_score": number
+}`
+          },
+          { role: "user", content: prompt }
+        ],
+        max_tokens: 500,
+        temperature: 0.4,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+
+    console.log(`[TEST] HF Trends API Response: ${response.status} ${response.statusText}`);
+
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (_) {
+        errorMessage = response.statusText || errorMessage;
+      }
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: errorMessage,
+        model: hfTextModel,
+        provider: "HF Trends Generation"
+      }), { status: 200, headers: corsHeaders });
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content?.trim();
+    console.log(`[TEST] HF Trends Raw Response (${content?.length || 0} chars):`, content);
+
+    // Try to parse JSON array from response
+    const jsonMatch = content?.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      const trends = parsed.slice(0, 3);
+      console.log(`[TEST] ✅ HF Trends Success: Parsed ${trends.length} trends`);
+
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: `Generated ${trends.length} trends: ${trends.map((t: any) => t.trend).join(", ")}`,
+        model: hfTextModel,
+        provider: "HF Trends Generation",
+        trends: trends,
+      }), { headers: corsHeaders });
+    } else {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: `Could not parse trends from response: ${content?.substring(0, 200)}`,
+        model: hfTextModel,
+        provider: "HF Trends Generation"
+      }), { status: 200, headers: corsHeaders });
+    }
+  } catch (e) {
+    console.error("TEST HF Trends error:", e);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: e instanceof Error ? e.message : String(e),
+      provider: "HF Trends Generation"
+    }), { status: 500, headers: corsHeaders });
+  }
+}
+
 async function handleTestRSS(req: Request): Promise<Response> {
   try {
     console.log("[TEST] Testing Google Trends RSS feed...");
@@ -1027,6 +1230,8 @@ Deno.serve(async (req) => {
     if (path === "/api/test-facebook-connection" && method === "POST") return await handleTestFacebookConnection(req);
     if (path === "/api/test-groq" && method === "POST") return await handleTestGROQ(req);
     if (path === "/api/test-huggingface" && method === "POST") return await handleTestHuggingFace(req);
+    if (path === "/api/test-hf-image" && method === "POST") return await handleTestHFImage(req);
+    if (path === "/api/test-hf-trends" && method === "POST") return await handleTestHFTrends(req);
     if (path === "/api/test-rss" && method === "POST") return await handleTestRSS(req);
     if (path === "/api/test-generate-post" && method === "POST") return await handleTestGeneratePost(req);
     if (path === "/api/system-status" && method === "GET") return await handleSystemStatus(req);

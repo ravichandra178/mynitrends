@@ -29,6 +29,8 @@ export default function SettingsPage() {
   const [testingAI, setTestingAI] = useState({
     groq: false,
     huggingface: false,
+    hfImage: false,
+    hfTrends: false,
     rss: false,
     facebook: false,
     generatePost: false,
@@ -36,6 +38,8 @@ export default function SettingsPage() {
   const [testResults, setTestResults] = useState({
     groq: null as any,
     huggingface: null as any,
+    hfImage: null as any,
+    hfTrends: null as any,
     rss: null as any,
     facebook: null as any,
     generatePost: null as any,
@@ -146,6 +150,52 @@ export default function SettingsPage() {
       toast.error(`RSS test failed: ${e.message}`);
     } finally {
       setTestingAI(prev => ({ ...prev, rss: false }));
+    }
+  };
+
+  const testHFImageGeneration = async () => {
+    setTestingAI(prev => ({ ...prev, hfImage: true }));
+    try {
+      const response = await fetch(`${API_BASE}/api/test-hf-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const result = await response.json();
+      setTestResults(prev => ({ ...prev, hfImage: result }));
+      if (result.success) {
+        toast.success(`HF Image working: ${result.message}`);
+      } else {
+        toast.error(`HF Image failed: ${result.error}`);
+      }
+    } catch (e: any) {
+      setTestResults(prev => ({ ...prev, hfImage: { success: false, error: e.message } }));
+      toast.error(`HF Image test failed: ${e.message}`);
+    } finally {
+      setTestingAI(prev => ({ ...prev, hfImage: false }));
+    }
+  };
+
+  const testHFTrendsGeneration = async () => {
+    setTestingAI(prev => ({ ...prev, hfTrends: true }));
+    try {
+      const response = await fetch(`${API_BASE}/api/test-hf-trends`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const result = await response.json();
+      setTestResults(prev => ({ ...prev, hfTrends: result }));
+      if (result.success) {
+        toast.success(`HF Trends working: ${result.message}`);
+      } else {
+        toast.error(`HF Trends failed: ${result.error}`);
+      }
+    } catch (e: any) {
+      setTestResults(prev => ({ ...prev, hfTrends: { success: false, error: e.message } }));
+      toast.error(`HF Trends test failed: ${e.message}`);
+    } finally {
+      setTestingAI(prev => ({ ...prev, hfTrends: false }));
     }
   };
 
@@ -301,6 +351,102 @@ export default function SettingsPage() {
                 </Button>
               </div>
             </div>
+
+            <div className="flex items-center justify-between p-3 border rounded">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">
+                  🖼️
+                </div>
+                <div>
+                  <div className="font-medium">HF Image Generation</div>
+                  <div className="text-xs text-muted-foreground">runwayml/stable-diffusion-v1-5</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {testResults.hfImage && (
+                  <div className="flex items-center gap-1">
+                    {testResults.hfImage.success ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                    <span className="text-xs">
+                      {testResults.hfImage.success ? "Working" : "Failed"}
+                    </span>
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={testHFImageGeneration}
+                  disabled={testingAI.hfImage}
+                >
+                  {testingAI.hfImage ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  Test
+                </Button>
+              </div>
+            </div>
+
+            {testResults.hfImage?.success && testResults.hfImage?.imageUrl && (
+              <div className="p-3 border rounded bg-gray-50">
+                <p className="text-xs text-muted-foreground mb-2">Generated test image ({testResults.hfImage.sizeKB}KB):</p>
+                <img 
+                  src={testResults.hfImage.imageUrl} 
+                  alt="HF Test Image" 
+                  className="w-full max-w-[256px] rounded-lg border"
+                />
+              </div>
+            )}
+
+            <div className="flex items-center justify-between p-3 border rounded">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                  📊
+                </div>
+                <div>
+                  <div className="font-medium">HF Trends Generation</div>
+                  <div className="text-xs text-muted-foreground">{form.hf_model} → trends</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {testResults.hfTrends && (
+                  <div className="flex items-center gap-1">
+                    {testResults.hfTrends.success ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                    <span className="text-xs">
+                      {testResults.hfTrends.success ? "Working" : "Failed"}
+                    </span>
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={testHFTrendsGeneration}
+                  disabled={testingAI.hfTrends}
+                >
+                  {testingAI.hfTrends ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  Test
+                </Button>
+              </div>
+            </div>
+
+            {testResults.hfTrends?.success && testResults.hfTrends?.trends && (
+              <div className="p-3 border rounded bg-gray-50">
+                <p className="text-xs text-muted-foreground mb-2">Generated trends:</p>
+                <ul className="text-xs space-y-1">
+                  {testResults.hfTrends.trends.map((t: any, i: number) => (
+                    <li key={i} className="flex items-center gap-2">
+                      <span className="text-green-500">✓</span>
+                      <span className="font-medium">{t.trend}</span>
+                      <span className="text-muted-foreground">({t.source}, score: {t.engagement_score})</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="flex items-center justify-between p-3 border rounded">
               <div className="flex items-center gap-3">

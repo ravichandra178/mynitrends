@@ -163,8 +163,8 @@ Just the post text.`
   console.log(`[IMAGE] Starting image generation for topic: "${topic}"`);
   
   if (hfApiKey) {
-    // First, generate a good image prompt from the post content using AI
-    let imagePrompt = `Professional social media graphic about ${topic}, modern design, vibrant colors, clean layout`;
+    // Default image prompt using the user's preferred template
+    let imagePrompt = `Create a social media poster about: ${postText}, modern design, vibrant colors, trending topic, 4k, cinematic lighting`;
     
     // Try to get a better image prompt from GROQ
     if (groqApiKey) {
@@ -181,11 +181,13 @@ Just the post text.`
             messages: [
               {
                 role: "user",
-                content: `Generate a short image description (max 50 words) for an AI image generator to create a social media graphic for this post:
+                content: `Generate a short image prompt (max 50 words) for an AI image generator.
+The image should be a social media poster for this post:
 "${postText}"
 Topic: ${topic}
-Style: Professional, modern, vibrant, suitable for Facebook.
-Return ONLY the image description, nothing else.`
+Follow this format strictly:
+"Create a social media poster about: [topic summary], modern design, vibrant colors, trending topic, 4k, cinematic lighting"
+Return ONLY the prompt, nothing else.`
               }
             ],
             max_tokens: 80,
