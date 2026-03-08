@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { fetchSettings, updateSettings, testConnection, testGROQ, testHuggingFace, testRSS, testFacebookConnection } from "@/lib/api-helpers";
+import { fetchSettings, updateSettings, testConnection, testGROQ, testHuggingFace, testFacebookConnection } from "@/lib/api-helpers";
 import { toast } from "sonner";
 
 // Import API_BASE for direct API calls
@@ -125,6 +125,27 @@ export default function SettingsPage() {
       toast.error(`Hugging Face test failed: ${e.message}`);
     } finally {
       setTestingAI(prev => ({ ...prev, huggingface: false }));
+    }
+  };
+
+  const testRSSConnection = async () => {
+    setTestingAI(prev => ({ ...prev, rss: true }));
+    try {
+      const response = await fetch(`${API_BASE}/api/test-rss`, {
+        method: "POST",
+      });
+      const result = await response.json();
+      setTestResults(prev => ({ ...prev, rss: result }));
+      if (result.success) {
+        toast.success(`RSS working: ${result.message}`);
+      } else {
+        toast.error(`RSS failed: ${result.error}`);
+      }
+    } catch (e: any) {
+      setTestResults(prev => ({ ...prev, rss: { success: false, error: e.message } }));
+      toast.error(`RSS test failed: ${e.message}`);
+    } finally {
+      setTestingAI(prev => ({ ...prev, rss: false }));
     }
   };
 
@@ -307,7 +328,7 @@ export default function SettingsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={testRSS}
+                  onClick={testRSSConnection}
                   disabled={testingAI.rss}
                 >
                   {testingAI.rss ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
