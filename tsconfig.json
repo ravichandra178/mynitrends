@@ -10,7 +10,11 @@
       ]
     },
     "skipLibCheck": true,
-    "strictNullChecks": false
+    "strictNullChecks": false,
+    "lib": [
+      "deno.ns",
+      "ESNext"
+    ]
   },
   "files": [],
   "references": [

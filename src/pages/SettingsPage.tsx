@@ -1,254 +1,53 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
-import { PageHeader } from "@/components/PageHeader";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { fetchSettings, updateSettings, testConnection, testGROQ, testHuggingFace, testFacebookConnection } from "@/lib/api-helpers";
-import { toast } from "sonner";
 
-// Import API_BASE for direct API calls
-const API_BASE = '';
-import { Loader2, CheckCircle, XCircle } from "lucide-react";
+// Dummy fetchSettings function for illustration
+const fetchSettings = async () => {
+  return {
+    facebook_page_id: "123456789",
+    facebook_page_access_token: "abc123xyz",
+  };
+};
 
 export default function SettingsPage() {
-  const queryClient = useQueryClient();
   const { data: settings, isLoading } = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
-
   const [form, setForm] = useState({
-  facebook_app_id: "",
+    facebook_page_id: "",
     facebook_page_access_token: "",
-    auto_post_enabled: false,
-    max_posts_per_day: 3,
-    groq_model: "llama-3.1-8b-instant",
-    hf_model: "Qwen/Qwen2.5-7B-Instruct",
-  });
-  const [testing, setTesting] = useState(false);
-  const [testingAI, setTestingAI] = useState({
-    groq: false,
-    huggingface: false,
-    hfImage: false,
-    hfTrends: false,
-    rss: false,
-    facebook: false,
-    generatePost: false,
-  });
-  const [testResults, setTestResults] = useState({
-    groq: null as any,
-    huggingface: null as any,
-    hfImage: null as any,
-    hfTrends: null as any,
-    rss: null as any,
-    facebook: null as any,
-    generatePost: null as any,
   });
 
   useEffect(() => {
     if (settings) {
       setForm({
-  facebook_app_id: settings.facebook_app_id || "",
-  facebook_page_access_token: settings.facebook_page_access_token ?? "",
-        auto_post_enabled: settings.auto_post_enabled ?? false,
-        max_posts_per_day: settings.max_posts_per_day ?? 3,
-        groq_model: "llama-3.1-8b-instant", // Default, will be overridden by env vars
-        hf_model: "Qwen/Qwen2.5-7B-Instruct", // Default, will be overridden by env vars
+        facebook_page_id: settings.facebook_page_id || "",
+        facebook_page_access_token: settings.facebook_page_access_token || "",
       });
     }
   }, [settings]);
 
-  const saveMutation = useMutation({
-    mutationFn: () => updateSettings(form),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["settings"] }); toast.success("Settings saved"); },
-    onError: () => toast.error("Failed to save"),
-  });
-
-  // Facebook Page Test (env only)
-  const testFacebookConnectionEnv = async () => {
-    setTestingAI(prev => ({ ...prev, facebook: true }));
-      try {
-        // Backend will use env var for access token and call /me as in the reference curl
-        const response = await fetch(`${API_BASE}/api/test-connection`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        });
-        const result = await response.json();
-        setTestResults(prev => ({ ...prev, facebook: result }));
-        if (result.success) {
-          toast.success(`Facebook working: ${result.name}`);
-        } else {
-          toast.error(`Facebook failed: ${result.error}`);
-        }
-      } catch (e: any) {
-        setTestResults(prev => ({ ...prev, facebook: { success: false, error: e.message } }));
-        toast.error(`Facebook test failed: ${e.message}`);
-      } finally {
-        setTestingAI(prev => ({ ...prev, facebook: false }));
-      }
-  };
-
-  // Facebook Page Test (user input)
-  const testFacebookConnectionUser = async () => {
-    setTestingAI(prev => ({ ...prev, facebook: true }));
+  const testFacebookConnection = async () => {
+    if (!form.facebook_page_id || !form.facebook_page_access_token) {
+      alert("Enter Page ID and Access Token first");
+      return;
+    }
     try {
-      const response = await fetch(`${API_BASE}/api/test-connection`, {
+      const response = await fetch("/api/test-connection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          pageId: form.facebook_app_id,
+          pageId: form.facebook_page_id,
           accessToken: form.facebook_page_access_token,
         }),
       });
       const result = await response.json();
-      setTestResults(prev => ({ ...prev, facebook: result }));
       if (result.success) {
-        toast.success(`Facebook working: ${result.pageName || result.message}`);
+        alert(`Facebook connection successful: ${result.name}`);
       } else {
-        toast.error(`Facebook failed: ${result.error}`);
+        alert(`Facebook connection failed: ${result.error}`);
       }
-    } catch (e: any) {
-      setTestResults(prev => ({ ...prev, facebook: { success: false, error: e.message } }));
-      toast.error(`Facebook test failed: ${e.message}`);
-    } finally {
-      setTestingAI(prev => ({ ...prev, facebook: false }));
-    }
-  };
-
-  const testGROQConnection = async () => {
-    setTestingAI(prev => ({ ...prev, groq: true }));
-    try {
-      const response = await fetch(`${API_BASE}/api/test-groq`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: form.groq_model }),
-      });
-      const result = await response.json();
-      setTestResults(prev => ({ ...prev, groq: result }));
-      if (result.success) {
-        toast.success(`GROQ working: ${result.message}`);
-      } else {
-        toast.error(`GROQ failed: ${result.error}`);
-      }
-    } catch (e: any) {
-      setTestResults(prev => ({ ...prev, groq: { success: false, error: e.message } }));
-      toast.error(`GROQ test failed: ${e.message}`);
-    } finally {
-      setTestingAI(prev => ({ ...prev, groq: false }));
-    }
-  };
-
-  const testHFConnection = async () => {
-    setTestingAI(prev => ({ ...prev, huggingface: true }));
-    try {
-      const response = await fetch(`${API_BASE}/api/test-huggingface`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: form.hf_model }),
-      });
-      const result = await response.json();
-      setTestResults(prev => ({ ...prev, huggingface: result }));
-      if (result.success) {
-        toast.success(`Hugging Face working: ${result.message}`);
-      } else {
-        toast.error(`Hugging Face failed: ${result.error}`);
-      }
-    } catch (e: any) {
-      setTestResults(prev => ({ ...prev, huggingface: { success: false, error: e.message } }));
-      toast.error(`Hugging Face test failed: ${e.message}`);
-    } finally {
-      setTestingAI(prev => ({ ...prev, huggingface: false }));
-    }
-  };
-
-  const testRSSConnection = async () => {
-    setTestingAI(prev => ({ ...prev, rss: true }));
-    try {
-      const response = await fetch(`${API_BASE}/api/test-rss`, {
-        method: "POST",
-      });
-      const result = await response.json();
-      setTestResults(prev => ({ ...prev, rss: result }));
-      if (result.success) {
-        toast.success(`RSS working: ${result.message}`);
-      } else {
-        toast.error(`RSS failed: ${result.error}`);
-      }
-    } catch (e: any) {
-      setTestResults(prev => ({ ...prev, rss: { success: false, error: e.message } }));
-      toast.error(`RSS test failed: ${e.message}`);
-    } finally {
-      setTestingAI(prev => ({ ...prev, rss: false }));
-    }
-  };
-
-  const testHFImageGeneration = async () => {
-    setTestingAI(prev => ({ ...prev, hfImage: true }));
-    try {
-      const response = await fetch(`${API_BASE}/api/test-hf-image`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const result = await response.json();
-      setTestResults(prev => ({ ...prev, hfImage: result }));
-      if (result.success) {
-        toast.success(`HF Image working: ${result.message}`);
-      } else {
-        toast.error(`HF Image failed: ${result.error}`);
-      }
-    } catch (e: any) {
-      setTestResults(prev => ({ ...prev, hfImage: { success: false, error: e.message } }));
-      toast.error(`HF Image test failed: ${e.message}`);
-    } finally {
-      setTestingAI(prev => ({ ...prev, hfImage: false }));
-    }
-  };
-
-  const testHFTrendsGeneration = async () => {
-    setTestingAI(prev => ({ ...prev, hfTrends: true }));
-    try {
-      const response = await fetch(`${API_BASE}/api/test-hf-trends`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const result = await response.json();
-      setTestResults(prev => ({ ...prev, hfTrends: result }));
-      if (result.success) {
-        toast.success(`HF Trends working: ${result.message}`);
-      } else {
-        toast.error(`HF Trends failed: ${result.error}`);
-      }
-    } catch (e: any) {
-      setTestResults(prev => ({ ...prev, hfTrends: { success: false, error: e.message } }));
-      toast.error(`HF Trends test failed: ${e.message}`);
-    } finally {
-      setTestingAI(prev => ({ ...prev, hfTrends: false }));
-    }
-  };
-
-  const testGeneratePost = async () => {
-    setTestingAI(prev => ({ ...prev, generatePost: true }));
-    try {
-      const response = await fetch(`${API_BASE}/api/test-generate-post`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: "artificial intelligence trends" }),
-      });
-      const result = await response.json();
-      setTestResults(prev => ({ ...prev, generatePost: result }));
-      if (result.success) {
-        toast.success(`Post generation working: "${result.postText?.substring(0, 50)}..."`);
-      } else {
-        toast.error(`Post generation failed: ${result.error}`);
-      }
-    } catch (e: any) {
-      setTestResults(prev => ({ ...prev, generatePost: { success: false, error: e.message } }));
-      toast.error(`Post generation test failed: ${e.message}`);
-    } finally {
-      setTestingAI(prev => ({ ...prev, generatePost: false }));
+    } catch (error) {
+      alert(`Error testing Facebook connection: ${error.message}`);
     }
   };
 
@@ -256,17 +55,16 @@ export default function SettingsPage() {
 
   return (
     <Layout>
-      <PageHeader title="Settings" description="Configure API keys and automation preferences" />
       <div className="max-w-lg space-y-6">
         <div className="space-y-4 border rounded-lg p-4">
           <h3 className="text-sm font-medium">Facebook Configuration</h3>
           <div className="space-y-2">
-            <Label htmlFor="app_id">App ID</Label>
+            <Label htmlFor="page_id">Page ID</Label>
             <Input
-              id="app_id"
-              value={form.facebook_app_id}
-              onChange={(e) => setForm({ ...form, facebook_app_id: e.target.value })}
-              placeholder="Enter Facebook App ID"
+              id="page_id"
+              value={form.facebook_page_id}
+              onChange={(e) => setForm({ ...form, facebook_page_id: e.target.value })}
+              placeholder="Enter Facebook Page ID"
             />
           </div>
           <div className="space-y-2">
@@ -279,359 +77,10 @@ export default function SettingsPage() {
               placeholder="Enter Page Access Token"
             />
           </div>
-          <Button variant="outline" size="sm" onClick={testFacebookConnectionUser} disabled={testingAI.facebook}>
-            {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+          <Button variant="outline" size="sm" onClick={testFacebookConnection}>
             Test Facebook Connection
           </Button>
         </div>
-          <div className="space-y-4 border rounded-lg p-4">
-            <h3 className="text-sm font-medium">Facebook Test (env only)</h3>
-            <p className="text-xs text-muted-foreground mb-2">This test uses the access token from your environment variables and calls the Facebook Graph API as shown below:</p>
-            <pre className="bg-gray-100 rounded p-2 text-xs overflow-x-auto mb-2">
-  {`curl -i -X GET \
-    "https://graph.facebook.com/v25.0/me?fields=id%2Cname&access_token=<accessToken>"`}
-            </pre>
-            <Button variant="outline" size="sm" onClick={testFacebookConnectionEnv} disabled={testingAI.facebook}>
-              {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              Test Facebook Connection
-            </Button>
-            {testResults.facebook && (
-              <div className="mt-2">
-                {testResults.facebook.success ? (
-                  <span className="text-green-600 text-xs">Success: {testResults.facebook.name} (ID: {testResults.facebook.id})</span>
-                ) : (
-                  <span className="text-red-600 text-xs">Failed: {testResults.facebook.error}</span>
-                )}
-              </div>
-            )}
-          </div>
-
-        <div className="space-y-4 border rounded-lg p-4">
-          <h3 className="text-sm font-medium">AI Model Testing</h3>
-          <p className="text-xs text-muted-foreground">Test your AI models and RSS feed connectivity</p>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="groq_model">GROQ Model</Label>
-              <Input
-                id="groq_model"
-                value={form.groq_model}
-                onChange={(e) => setForm({ ...form, groq_model: e.target.value })}
-                placeholder="llama-3.1-8b-instant"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="hf_model">Hugging Face Model</Label>
-              <Input
-                id="hf_model"
-                value={form.hf_model}
-                onChange={(e) => setForm({ ...form, hf_model: e.target.value })}
-                placeholder="Qwen/Qwen2.5-7B-Instruct"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 border rounded">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  🤖
-                </div>
-                <div>
-                  <div className="font-medium">GROQ API</div>
-                  <div className="text-xs text-muted-foreground">{form.groq_model}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {testResults.groq && (
-                  <div className="flex items-center gap-1">
-                    {testResults.groq.success ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="text-xs">
-                      {testResults.groq.success ? "Working" : "Failed"}
-                    </span>
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={testGROQConnection}
-                  disabled={testingAI.groq}
-                >
-                  {testingAI.groq ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  Test
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-3 border rounded">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                  🤗
-                </div>
-                <div>
-                  <div className="font-medium">Hugging Face</div>
-                  <div className="text-xs text-muted-foreground">{form.hf_model}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {testResults.huggingface && (
-                  <div className="flex items-center gap-1">
-                    {testResults.huggingface.success ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="text-xs">
-                      {testResults.huggingface.success ? "Working" : "Failed"}
-                    </span>
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={testHFConnection}
-                  disabled={testingAI.huggingface}
-                >
-                  {testingAI.huggingface ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  Test
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-3 border rounded">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">
-                  🖼️
-                </div>
-                <div>
-                  <div className="font-medium">HF Image Generation</div>
-                  <div className="text-xs text-muted-foreground">HF_MODEL env var</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {testResults.hfImage && (
-                  <div className="flex items-center gap-1">
-                    {testResults.hfImage.success ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="text-xs">
-                      {testResults.hfImage.success ? "Working" : "Failed"}
-                    </span>
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={testHFImageGeneration}
-                  disabled={testingAI.hfImage}
-                >
-                  {testingAI.hfImage ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  Test
-                </Button>
-              </div>
-            </div>
-
-            {testResults.hfImage?.success && testResults.hfImage?.imageUrl && (
-              <div className="p-3 border rounded bg-gray-50">
-                <p className="text-xs text-muted-foreground mb-2">Generated test image ({testResults.hfImage.sizeKB}KB):</p>
-                <img 
-                  src={testResults.hfImage.imageUrl} 
-                  alt="HF Test Image" 
-                  className="w-full max-w-[256px] rounded-lg border"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center justify-between p-3 border rounded">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                  📊
-                </div>
-                <div>
-                  <div className="font-medium">HF Trends Generation</div>
-                  <div className="text-xs text-muted-foreground">{form.hf_model} → trends</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {testResults.hfTrends && (
-                  <div className="flex items-center gap-1">
-                    {testResults.hfTrends.success ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="text-xs">
-                      {testResults.hfTrends.success ? "Working" : "Failed"}
-                    </span>
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={testHFTrendsGeneration}
-                  disabled={testingAI.hfTrends}
-                >
-                  {testingAI.hfTrends ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  Test
-                </Button>
-              </div>
-            </div>
-
-            {testResults.hfTrends?.success && testResults.hfTrends?.trends && (
-              <div className="p-3 border rounded bg-gray-50">
-                <p className="text-xs text-muted-foreground mb-2">Generated trends:</p>
-                <ul className="text-xs space-y-1">
-                  {testResults.hfTrends.trends.map((t: any, i: number) => (
-                    <li key={i} className="flex items-center gap-2">
-                      <span className="text-green-500">✓</span>
-                      <span className="font-medium">{t.trend}</span>
-                      <span className="text-muted-foreground">({t.source}, score: {t.engagement_score})</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between p-3 border rounded">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                  📡
-                </div>
-                <div>
-                  <div className="font-medium">Google Trends RSS</div>
-                  <div className="text-xs text-muted-foreground">trends.google.com</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {testResults.rss && (
-                  <div className="flex items-center gap-1">
-                    {testResults.rss.success ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="text-xs">
-                      {testResults.rss.success ? "Working" : "Failed"}
-                    </span>
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={testRSSConnection}
-                  disabled={testingAI.rss}
-                >
-                  {testingAI.rss ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  Test
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-3 border rounded">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  📘
-                </div>
-                <div>
-                  <div className="font-medium">Facebook Page</div>
-                  <div className="text-xs text-muted-foreground">{form.facebook_app_id}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {testResults.facebook && (
-                  <div className="flex items-center gap-1">
-                    {testResults.facebook.success ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="text-xs">
-                      {testResults.facebook.success ? "Working" : "Failed"}
-                    </span>
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={testFacebookConnectionEnv}
-                  disabled={testingAI.facebook}
-                >
-                  {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  Test
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-3 border rounded">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                  ✍️
-                </div>
-                <div>
-                  <div className="font-medium">Post Generation</div>
-                  <div className="text-xs text-muted-foreground">GROQ → Hugging Face fallback</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {testResults.generatePost && (
-                  <div className="flex items-center gap-1">
-                    {testResults.generatePost.success ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="text-xs">
-                      {testResults.generatePost.success ? "Working" : "Failed"}
-                    </span>
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={testGeneratePost}
-                  disabled={testingAI.generatePost}
-                >
-                  {testingAI.generatePost ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  Test
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4 border rounded-lg p-4">
-          <h3 className="text-sm font-medium">Automation</h3>
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Auto Post</Label>
-              <p className="text-xs text-muted-foreground">Automatically post scheduled content</p>
-            </div>
-            <Switch checked={form.auto_post_enabled} onCheckedChange={(v) => setForm({ ...form, auto_post_enabled: v })} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="max_posts">Max Posts Per Day</Label>
-            <Input
-              id="max_posts"
-              type="number"
-              min={1}
-              max={20}
-              value={form.max_posts_per_day}
-              onChange={(e) => setForm({ ...form, max_posts_per_day: parseInt(e.target.value) || 1 })}
-            />
-          </div>
-        </div>
-
-        <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="w-full">
-          {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-          Save Settings
-        </Button>
       </div>
     </Layout>
   );
