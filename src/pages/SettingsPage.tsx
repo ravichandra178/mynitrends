@@ -1,3 +1,49 @@
+  // Facebook Post Dry-Run Test
+  const [testingFacebookPost, setTestingFacebookPost] = useState(false);
+  const [testFacebookPostResult, setTestFacebookPostResult] = useState<any>(null);
+
+  const handleTestFacebookPost = async () => {
+    setTestingFacebookPost(true);
+    setTestFacebookPostResult(null);
+    try {
+      const result = await import("@/lib/test-facebook-post-dryrun").then(m => m.testPostToFacebookAPI());
+      setTestFacebookPostResult(result);
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.error || "Test failed");
+      }
+    } catch (e: any) {
+      setTestFacebookPostResult({ error: e.message });
+      toast.error(e.message || "Test failed");
+    } finally {
+      setTestingFacebookPost(false);
+    }
+  };
+        {/* Facebook Post Dry-Run Test Section */}
+        <div className="space-y-4 border rounded-lg p-4">
+          <h3 className="text-sm font-medium">Test Post to Facebook (Dry Run, no actual post)</h3>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleTestFacebookPost}
+            disabled={testingFacebookPost}
+          >
+            {testingFacebookPost ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+            Test Post to Facebook
+          </Button>
+          {testFacebookPostResult && (
+            <div className="p-3 border rounded bg-gray-50 mt-2">
+              <div className="text-xs">
+                {testFacebookPostResult.error ? (
+                  <span className="text-red-600">{testFacebookPostResult.error}</span>
+                ) : (
+                  <span className="text-green-600">{testFacebookPostResult.message}</span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
@@ -18,7 +64,7 @@ export default function SettingsPage() {
   const { data: settings, isLoading } = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
 
   const [form, setForm] = useState({
-    facebook_page_id: "61586953905789",
+  facebook_app_id: "",
     facebook_page_access_token: "",
     auto_post_enabled: false,
     max_posts_per_day: 3,
@@ -48,8 +94,8 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings) {
       setForm({
-        facebook_page_id: settings.facebook_page_id || "61586953905789",
-        facebook_page_access_token: settings.facebook_page_access_token ?? "",
+  facebook_app_id: settings.facebook_app_id || "",
+  facebook_page_access_token: settings.facebook_page_access_token ?? "",
         auto_post_enabled: settings.auto_post_enabled ?? false,
         max_posts_per_day: settings.max_posts_per_day ?? 3,
         groq_model: "llama-3.1-8b-instant", // Default, will be overridden by env vars
@@ -65,13 +111,14 @@ export default function SettingsPage() {
   });
 
   const testFacebookConnectionUI = async () => {
-    if (!form.facebook_page_id || !form.facebook_page_access_token) {
-      toast.error("Enter Page ID and Access Token first");
+    if (!form.facebook_app_id || !form.facebook_page_access_token) {
+      toast.error("Enter App ID and Access Token first");
       return;
     }
     setTestingAI(prev => ({ ...prev, facebook: true }));
     try {
-      const result = await testFacebookConnection(form.facebook_page_id, form.facebook_page_access_token);
+      // For testing, pass app_id as pageId to backend (for test only)
+      const result = await testFacebookConnection(form.facebook_app_id, form.facebook_page_access_token);
       setTestResults(prev => ({ ...prev, facebook: result }));
       if (result.success) {
         toast.success(`Facebook working: ${result.message}`);
@@ -231,12 +278,12 @@ export default function SettingsPage() {
         <div className="space-y-4 border rounded-lg p-4">
           <h3 className="text-sm font-medium">Facebook Configuration</h3>
           <div className="space-y-2">
-            <Label htmlFor="page_id">Page ID</Label>
+            <Label htmlFor="app_id">App ID</Label>
             <Input
-              id="page_id"
-              value={form.facebook_page_id}
-              onChange={(e) => setForm({ ...form, facebook_page_id: e.target.value })}
-              placeholder="61586953905789"
+              id="app_id"
+              value={form.facebook_app_id}
+              onChange={(e) => setForm({ ...form, facebook_app_id: e.target.value })}
+              placeholder="Enter Facebook App ID"
             />
           </div>
           <div className="space-y-2">
@@ -490,7 +537,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <div className="font-medium">Facebook Page</div>
-                  <div className="text-xs text-muted-foreground">{form.facebook_page_id}</div>
+                  <div className="text-xs text-muted-foreground">{form.facebook_app_id}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -510,7 +557,7 @@ export default function SettingsPage() {
                   variant="outline"
                   size="sm"
                   onClick={testFacebookConnectionUI}
-                  disabled={testingAI.facebook || !form.facebook_page_id || !form.facebook_page_access_token}
+                  disabled={testingAI.facebook || !form.facebook_app_id || !form.facebook_page_access_token}
                 >
                   {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
                   Test
