@@ -64,15 +64,17 @@ export default function SettingsPage() {
     onError: () => toast.error("Failed to save"),
   });
 
+  // Facebook Page Test (env only)
   const testFacebookConnectionUI = async () => {
-    if (!form.facebook_app_id || !form.facebook_page_access_token) {
-      toast.error("Enter App ID and Access Token first");
-      return;
-    }
     setTestingAI(prev => ({ ...prev, facebook: true }));
     try {
-      // For testing, pass app_id as pageId to backend (for test only)
-      const result = await testFacebookConnection(form.facebook_app_id, form.facebook_page_access_token);
+      // Call backend endpoint that uses only env vars for App ID and Access Token
+      const response = await fetch(`${API_BASE}/api/test-facebook-connection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}), // No pageId or accessToken sent from frontend
+      });
+      const result = await response.json();
       setTestResults(prev => ({ ...prev, facebook: result }));
       if (result.success) {
         toast.success(`Facebook working: ${result.message}`);
@@ -511,7 +513,7 @@ export default function SettingsPage() {
                   variant="outline"
                   size="sm"
                   onClick={testFacebookConnectionUI}
-                  disabled={testingAI.facebook || !form.facebook_app_id || !form.facebook_page_access_token}
+                  disabled={testingAI.facebook}
                 >
                   {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
                   Test
