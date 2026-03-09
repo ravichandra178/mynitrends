@@ -21,7 +21,7 @@ serve(async (req) => {
 
     // Fallback to env vars if not provided in body
     if (!pageId) {
-      pageId = Deno.env.get("FACEBOOK_PAGE_ID");
+      pageId = Deno.env.get("FACEBOOK_APP_ID");
     }
     if (!accessToken) {
       accessToken = Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN");
