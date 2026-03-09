@@ -67,26 +67,26 @@ export default function SettingsPage() {
   // Facebook Page Test (env only)
   const testFacebookConnectionEnv = async () => {
     setTestingAI(prev => ({ ...prev, facebook: true }));
-    try {
-      // Call backend endpoint that uses only env vars for App ID and Access Token
-      const response = await fetch(`${API_BASE}/api/test-connection`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}), // No pageId or accessToken sent from frontend
-      });
-      const result = await response.json();
-      setTestResults(prev => ({ ...prev, facebook: result }));
-      if (result.success) {
-        toast.success(`Facebook working: ${result.pageName || result.message}`);
-      } else {
-        toast.error(`Facebook failed: ${result.error}`);
+      try {
+        // Backend will use env var for access token and call /me as in the reference curl
+        const response = await fetch(`${API_BASE}/api/test-connection`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        const result = await response.json();
+        setTestResults(prev => ({ ...prev, facebook: result }));
+        if (result.success) {
+          toast.success(`Facebook working: ${result.name}`);
+        } else {
+          toast.error(`Facebook failed: ${result.error}`);
+        }
+      } catch (e: any) {
+        setTestResults(prev => ({ ...prev, facebook: { success: false, error: e.message } }));
+        toast.error(`Facebook test failed: ${e.message}`);
+      } finally {
+        setTestingAI(prev => ({ ...prev, facebook: false }));
       }
-    } catch (e: any) {
-      setTestResults(prev => ({ ...prev, facebook: { success: false, error: e.message } }));
-      toast.error(`Facebook test failed: ${e.message}`);
-    } finally {
-      setTestingAI(prev => ({ ...prev, facebook: false }));
-    }
   };
 
   // Facebook Page Test (user input)
@@ -284,6 +284,27 @@ export default function SettingsPage() {
             Test Facebook Connection
           </Button>
         </div>
+          <div className="space-y-4 border rounded-lg p-4">
+            <h3 className="text-sm font-medium">Facebook Test (env only)</h3>
+            <p className="text-xs text-muted-foreground mb-2">This test uses the access token from your environment variables and calls the Facebook Graph API as shown below:</p>
+            <pre className="bg-gray-100 rounded p-2 text-xs overflow-x-auto mb-2">
+  {`curl -i -X GET \
+    "https://graph.facebook.com/v25.0/me?fields=id%2Cname&access_token=<accessToken>"`}
+            </pre>
+            <Button variant="outline" size="sm" onClick={testFacebookConnectionEnv} disabled={testingAI.facebook}>
+              {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Test Facebook Connection
+            </Button>
+            {testResults.facebook && (
+              <div className="mt-2">
+                {testResults.facebook.success ? (
+                  <span className="text-green-600 text-xs">Success: {testResults.facebook.name} (ID: {testResults.facebook.id})</span>
+                ) : (
+                  <span className="text-red-600 text-xs">Failed: {testResults.facebook.error}</span>
+                )}
+              </div>
+            )}
+          </div>
 
         <div className="space-y-4 border rounded-lg p-4">
           <h3 className="text-sm font-medium">AI Model Testing</h3>
