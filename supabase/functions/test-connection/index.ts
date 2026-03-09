@@ -29,9 +29,15 @@ serve(async (req) => {
 
     if (!pageId || !accessToken) throw new Error("Missing pageId or accessToken");
 
-    const fbRes = await fetch(
-      `https://graph.facebook.com/${pageId}?fields=name,id&access_token=${accessToken}`
-    );
+    let fbUrl;
+    if (pageId) {
+      // If pageId is provided, test the page connection
+      fbUrl = `https://graph.facebook.com/${pageId}?fields=name,id&access_token=${accessToken}`;
+    } else {
+      // Otherwise, test the user token
+      fbUrl = `https://graph.facebook.com/v25.0/me?fields=id,name&access_token=${accessToken}`;
+    }
+    const fbRes = await fetch(fbUrl);
     const fbData = await fbRes.json();
 
     if (fbData.error) {
@@ -40,7 +46,7 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ success: true, pageName: fbData.name, pageId: fbData.id }), {
+    return new Response(JSON.stringify({ success: true, name: fbData.name, id: fbData.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
