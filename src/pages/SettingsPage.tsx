@@ -65,11 +65,11 @@ export default function SettingsPage() {
   });
 
   // Facebook Page Test (env only)
-  const testFacebookConnectionUI = async () => {
+  const testFacebookConnectionEnv = async () => {
     setTestingAI(prev => ({ ...prev, facebook: true }));
     try {
       // Call backend endpoint that uses only env vars for App ID and Access Token
-      const response = await fetch(`${API_BASE}/api/test-facebook-connection`, {
+      const response = await fetch(`${API_BASE}/api/test-connection`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}), // No pageId or accessToken sent from frontend
@@ -77,7 +77,34 @@ export default function SettingsPage() {
       const result = await response.json();
       setTestResults(prev => ({ ...prev, facebook: result }));
       if (result.success) {
-        toast.success(`Facebook working: ${result.message}`);
+        toast.success(`Facebook working: ${result.pageName || result.message}`);
+      } else {
+        toast.error(`Facebook failed: ${result.error}`);
+      }
+    } catch (e: any) {
+      setTestResults(prev => ({ ...prev, facebook: { success: false, error: e.message } }));
+      toast.error(`Facebook test failed: ${e.message}`);
+    } finally {
+      setTestingAI(prev => ({ ...prev, facebook: false }));
+    }
+  };
+
+  // Facebook Page Test (user input)
+  const testFacebookConnectionUser = async () => {
+    setTestingAI(prev => ({ ...prev, facebook: true }));
+    try {
+      const response = await fetch(`${API_BASE}/api/test-connection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pageId: form.facebook_app_id,
+          accessToken: form.facebook_page_access_token,
+        }),
+      });
+      const result = await response.json();
+      setTestResults(prev => ({ ...prev, facebook: result }));
+      if (result.success) {
+        toast.success(`Facebook working: ${result.pageName || result.message}`);
       } else {
         toast.error(`Facebook failed: ${result.error}`);
       }
@@ -252,7 +279,7 @@ export default function SettingsPage() {
               placeholder="Enter Page Access Token"
             />
           </div>
-          <Button variant="outline" size="sm" onClick={testFacebookConnectionUI} disabled={testingAI.facebook}>
+          <Button variant="outline" size="sm" onClick={testFacebookConnectionUser} disabled={testingAI.facebook}>
             {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
             Test Facebook Connection
           </Button>
@@ -512,7 +539,7 @@ export default function SettingsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={testFacebookConnectionUI}
+                  onClick={testFacebookConnectionEnv}
                   disabled={testingAI.facebook}
                 >
                   {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
