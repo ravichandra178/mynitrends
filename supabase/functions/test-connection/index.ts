@@ -9,7 +9,24 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { pageId, accessToken } = await req.json();
+
+    let pageId, accessToken;
+    try {
+      const body = await req.json();
+      pageId = body.pageId;
+      accessToken = body.accessToken;
+    } catch (_) {
+      // If body is not JSON or empty, ignore
+    }
+
+    // Fallback to env vars if not provided in body
+    if (!pageId) {
+      pageId = Deno.env.get("FACEBOOK_PAGE_ID");
+    }
+    if (!accessToken) {
+      accessToken = Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN");
+    }
+
     if (!pageId || !accessToken) throw new Error("Missing pageId or accessToken");
 
     const fbRes = await fetch(
