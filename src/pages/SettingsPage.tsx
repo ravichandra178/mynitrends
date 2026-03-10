@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
+import { Button, Input, Label } from "@/components/ui";
 
 // Dummy fetchSettings function for illustration
 const fetchSettings = async () => {
@@ -51,6 +52,28 @@ export default function SettingsPage() {
     }
   };
 
+  const testImageGeneration = async (prompt) => {
+    if (!prompt) {
+      alert("Enter a prompt first");
+      return;
+    }
+    try {
+      const response = await fetch("/api/test-image-generation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        alert(`Image generated successfully: ${result.imageUrl}`);
+      } else {
+        alert(`Image generation failed: ${result.error}`);
+      }
+    } catch (error) {
+      alert(`Error generating image: ${error.message}`);
+    }
+  };
+
   if (isLoading) return <Layout><div className="flex items-center justify-center h-64 text-muted-foreground">Loading...</div></Layout>;
 
   return (
@@ -79,6 +102,25 @@ export default function SettingsPage() {
           </div>
           <Button variant="outline" size="sm" onClick={testFacebookConnection}>
             Test Facebook Connection
+          </Button>
+        </div>
+        <div className="space-y-4 border rounded-lg p-4">
+          <h3 className="text-sm font-medium">Test Image Generation</h3>
+          <div className="space-y-2">
+            <Label htmlFor="image_prompt">Prompt</Label>
+            <Input
+              id="image_prompt"
+              value={form.image_prompt || ""}
+              onChange={(e) => setForm({ ...form, image_prompt: e.target.value })}
+              placeholder="Enter a prompt for image generation"
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => testImageGeneration(form.image_prompt)}
+          >
+            Test Image Generation
           </Button>
         </div>
       </div>
