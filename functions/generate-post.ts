@@ -210,6 +210,13 @@ Return ONLY the prompt, nothing else.`
       }
     }
 
+    // Ensure imagePrompt is valid
+    if (!imagePrompt || imagePrompt.length === 0) {
+      // Simplified fallback: Use a hardcoded default prompt without external dependencies
+      imagePrompt = `Create a social media poster about: ${topic}, featuring a professional design, vibrant colors, and a modern aesthetic.`;
+      console.log(`[IMAGE] ⚠️ Using simplified fallback image prompt: "${imagePrompt}"`);
+    }
+
     try {
       console.log(`[IMAGE] Using model: ${primaryModel}`);
       console.log(`[IMAGE] Prompt: "${imagePrompt}"`);
