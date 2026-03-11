@@ -202,11 +202,12 @@ async function handleGeneratePost(req: Request): Promise<Response> {
     }
 
     // Call the actual generate-post function
-    const funcRes = await fetch(`${Deno.env.get("DENO_DEPLOYMENT_ID") ? "https://" + Deno.env.get("DENO_DEPLOYMENT_ID") + ".deno.dev" : "http://localhost:8000"}/functions/v1/generate-post`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trendId, topic }),
-    });
+    const base = getDeploymentUrl(req);
+    const funcRes = await fetch(`${base}/functions/v1/generate-post`, {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({ trendId, topic }),
+     });
 
     if (!funcRes.ok) throw new Error("Failed to generate post");
     const data = await funcRes.json();
@@ -226,10 +227,11 @@ async function handleGenerateTrends(req: Request): Promise<Response> {
   
   try {
     // Call the actual generate-trends function
-    const funcRes = await fetch(`${Deno.env.get("DENO_DEPLOYMENT_ID") ? "https://" + Deno.env.get("DENO_DEPLOYMENT_ID") + ".deno.dev" : "http://localhost:8000"}/functions/v1/generate-trends`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
+    const base = getDeploymentUrl(req);
+    const funcRes = await fetch(`${base}/functions/v1/generate-trends`, {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+     });
 
     if (!funcRes.ok) throw new Error("Failed to generate trends");
     const data = await funcRes.json();
@@ -253,11 +255,12 @@ async function handlePostToFacebook(req: Request): Promise<Response> {
     }
 
     // Call the actual post-to-facebook function
-    const funcRes = await fetch(`${Deno.env.get("DENO_DEPLOYMENT_ID") ? "https://" + Deno.env.get("DENO_DEPLOYMENT_ID") + ".deno.dev" : "http://localhost:8000"}/functions/v1/post-to-facebook`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ postId }),
-    });
+    const base = getDeploymentUrl(req);
+    const funcRes = await fetch(`${base}/functions/v1/post-to-facebook`, {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({ postId }),
+     });
 
     if (!funcRes.ok) throw new Error("Failed to post to Facebook");
     const data = await funcRes.json();
@@ -281,11 +284,12 @@ async function handleFetchEngagement(req: Request): Promise<Response> {
     }
 
     // Call the actual fetch-engagement function
-    const funcRes = await fetch(`${Deno.env.get("DENO_DEPLOYMENT_ID") ? "https://" + Deno.env.get("DENO_DEPLOYMENT_ID") + ".deno.dev" : "http://localhost:8000"}/functions/v1/fetch-engagement`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ postId, facebookPostId }),
-    });
+    const base = getDeploymentUrl(req);
+    const funcRes = await fetch(`${base}/functions/v1/fetch-engagement`, {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({ postId, facebookPostId }),
+     });
 
     if (!funcRes.ok) throw new Error("Failed to fetch engagement");
     const data = await funcRes.json();
@@ -309,11 +313,12 @@ async function handleTestConnection(req: Request): Promise<Response> {
     }
 
     // Call the actual test-connection function
-    const funcRes = await fetch(`${Deno.env.get("DENO_DEPLOYMENT_ID") ? "https://" + Deno.env.get("DENO_DEPLOYMENT_ID") + ".deno.dev" : "http://localhost:8000"}/functions/v1/test-connection`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pageId, accessToken }),
-    });
+    const base = getDeploymentUrl(req);
+    const funcRes = await fetch(`${base}/functions/v1/test-connection`, {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({ pageId, accessToken }),
+     });
 
     if (!funcRes.ok) throw new Error("Failed to test connection");
     const data = await funcRes.json();
@@ -325,6 +330,25 @@ async function handleTestConnection(req: Request): Promise<Response> {
     console.error("POST /api/test-connection error:", e);
     return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: corsHeaders });
   }
+}
+
+// Helper to determine the deployment base URL for internal function calls
+function getDeploymentUrl(req?: Request): string {
+  let url = Deno.env.get("DEPLOYMENT_URL");
+  if (!url) {
+    const id = Deno.env.get("DEPLOYMENT_ID");
+    if (id && id.length <= 63) {
+      url = `https://${id}.deno.dev`;
+    }
+  }
+  if (!url) {
+    if (req) {
+      try {
+        url = new URL(req.url).origin;
+      } catch {}
+    }
+  }
+  return url || "http://localhost:8000";
 }
 
 serve(async (req) => {

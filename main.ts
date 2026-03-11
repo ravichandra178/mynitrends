@@ -307,10 +307,24 @@ async function handlePostToFacebook(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: "Missing postId" }), { status: 400, headers: corsHeaders });
     }
 
-    const deploymentUrl = Deno.env.get("DENO_DEPLOYMENT_ID") 
-      ? `https://${Deno.env.get("DENO_DEPLOYMENT_ID")}.deno.dev`
-      : "http://localhost:8000";
-    
+    // Determine base URL for function invocation. Prefer explicit URL environment variable
+    // because DEPLOYMENT_ID can be too long for DNS labels (max 63 chars per label).
+    let deploymentUrl = Deno.env.get("DEPLOYMENT_URL");
+    if (!deploymentUrl) {
+      const id = Deno.env.get("DEPLOYMENT_ID");
+      if (id && id.length <= 63) {
+        deploymentUrl = `https://${id}.deno.dev`;
+      }
+    }
+    if (!deploymentUrl) {
+      // Fallback to origin of incoming request (works on deploy and localhost)
+      try {
+        deploymentUrl = new URL(req.url).origin;
+      } catch {
+        deploymentUrl = "http://localhost:8000";
+      }
+    }
+
     const funcRes = await fetch(`${deploymentUrl}/functions/v1/post-to-facebook`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -319,7 +333,7 @@ async function handlePostToFacebook(req: Request): Promise<Response> {
 
     if (!funcRes.ok) throw new Error("Failed to post to Facebook");
     const data = await funcRes.json();
-    
+
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -336,8 +350,8 @@ async function handleFetchEngagement(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: "Missing postId or facebookPostId" }), { status: 400, headers: corsHeaders });
     }
 
-    const deploymentUrl = Deno.env.get("DENO_DEPLOYMENT_ID") 
-      ? `https://${Deno.env.get("DENO_DEPLOYMENT_ID")}.deno.dev`
+    const deploymentUrl = Deno.env.get("DEPLOYMENT_ID") 
+      ? `https://${Deno.env.get("DEPLOYMENT_ID")}.deno.dev`
       : "http://localhost:8000";
     
     const funcRes = await fetch(`${deploymentUrl}/functions/v1/fetch-engagement`, {
@@ -391,8 +405,8 @@ async function handleTestConnection(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: "Missing pageId or accessToken" }), { status: 400, headers: corsHeaders });
     }
 
-    const deploymentUrl = Deno.env.get("DENO_DEPLOYMENT_ID") 
-      ? `https://${Deno.env.get("DENO_DEPLOYMENT_ID")}.deno.dev`
+    const deploymentUrl = Deno.env.get("DEPLOYMENT_ID") 
+      ? `https://${Deno.env.get("DEPLOYMENT_ID")}.deno.dev`
       : "http://localhost:8000";
     
     const funcRes = await fetch(`${deploymentUrl}/functions/v1/test-connection`, {
