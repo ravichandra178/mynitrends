@@ -307,23 +307,7 @@ async function handlePostToFacebook(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: "Missing postId" }), { status: 400, headers: corsHeaders });
     }
 
-    // Determine base URL for function invocation. Prefer explicit URL environment variable
-    // because DEPLOYMENT_ID can be too long for DNS labels (max 63 chars per label).
-    let deploymentUrl = Deno.env.get("DEPLOYMENT_URL");
-    if (!deploymentUrl) {
-      const id = Deno.env.get("DEPLOYMENT_ID");
-      if (id && id.length <= 63) {
-        deploymentUrl = `https://${id}.deno.dev`;
-      }
-    }
-    if (!deploymentUrl) {
-      // Fallback to origin of incoming request (works on deploy and localhost)
-      try {
-        deploymentUrl = new URL(req.url).origin;
-      } catch {
-        deploymentUrl = "http://localhost:8000";
-      }
-    }
+    const deploymentUrl = getDeploymentUrl(req);
 
     const funcRes = await fetch(`${deploymentUrl}/functions/v1/post-to-facebook`, {
       method: "POST",
@@ -350,9 +334,7 @@ async function handleFetchEngagement(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: "Missing postId or facebookPostId" }), { status: 400, headers: corsHeaders });
     }
 
-    const deploymentUrl = Deno.env.get("DEPLOYMENT_ID") 
-      ? `https://${Deno.env.get("DEPLOYMENT_ID")}.deno.dev`
-      : "http://localhost:8000";
+    const deploymentUrl = getDeploymentUrl(req);
     
     const funcRes = await fetch(`${deploymentUrl}/functions/v1/fetch-engagement`, {
       method: "POST",
@@ -405,9 +387,7 @@ async function handleTestConnection(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: "Missing pageId or accessToken" }), { status: 400, headers: corsHeaders });
     }
 
-    const deploymentUrl = Deno.env.get("DEPLOYMENT_ID") 
-      ? `https://${Deno.env.get("DEPLOYMENT_ID")}.deno.dev`
-      : "http://localhost:8000";
+    const deploymentUrl = getDeploymentUrl(req);
     
     const funcRes = await fetch(`${deploymentUrl}/functions/v1/test-connection`, {
       method: "POST",
@@ -1057,6 +1037,36 @@ Just the post text.`
       provider: "Post Generation"
     }), { status: 500, headers: corsHeaders });
   }
+}
+
+// determine base URL for function invocation. Prefer explicit URL environment variable
+// because DENO_DEPLOYMENT_ID can be too long for DNS labels (max 63 chars per label).
+function getDeploymentUrl(req?: Request): string {
+  let urlStr = Deno.env.get("DENO_DEPLOYMENT_URL") || "";
+  if (urlStr) {
+    try {
+      urlStr = new URL(urlStr).origin;
+    } catch {
+      urlStr = "";
+    }
+  }
+  if (!urlStr) {
+    const id = Deno.env.get("DENO_DEPLOYMENT_ID");
+    if (id && id.length <= 63) {
+      urlStr = `https://${id}.deno.dev`;
+    }
+  }
+  if (!urlStr && req) {
+    try {
+      urlStr = new URL(req.url).origin;
+    } catch {
+      urlStr = "";
+    }
+  }
+  if (!urlStr) {
+    urlStr = "http://localhost:8000";
+  }
+  return urlStr.replace(/\/+$/, "");
 }
 
 // Initialize database tables if they don't exist

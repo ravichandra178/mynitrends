@@ -334,21 +334,34 @@ async function handleTestConnection(req: Request): Promise<Response> {
 
 // Helper to determine the deployment base URL for internal function calls
 function getDeploymentUrl(req?: Request): string {
-  let url = Deno.env.get("DEPLOYMENT_URL");
-  if (!url) {
-    const id = Deno.env.get("DEPLOYMENT_ID");
+  let urlStr = Deno.env.get("DENO_DEPLOYMENT_URL") || "";
+  // if deployment URL provided, make sure we only keep origin (drop any path)
+  if (urlStr) {
+    try {
+      urlStr = new URL(urlStr).origin;
+    } catch {
+      // if it's not a valid URL, ignore it
+      urlStr = "";
+    }
+  }
+  if (!urlStr) {
+    const id = Deno.env.get("DENO_DEPLOYMENT_ID");
     if (id && id.length <= 63) {
-      url = `https://${id}.deno.dev`;
+      urlStr = `https://${id}.deno.dev`;
     }
   }
-  if (!url) {
-    if (req) {
-      try {
-        url = new URL(req.url).origin;
-      } catch {}
+  if (!urlStr && req) {
+    try {
+      urlStr = new URL(req.url).origin;
+    } catch {
+      urlStr = "";
     }
   }
-  return url || "http://localhost:8000";
+  if (!urlStr) {
+    urlStr = "http://localhost:8000";
+  }
+  // strip trailing slash if present
+  return urlStr.replace(/\/+$/, "");
 }
 
 serve(async (req) => {
