@@ -308,6 +308,7 @@ async function handlePostToFacebook(req: Request): Promise<Response> {
     }
 
     const deploymentUrl = getDeploymentUrl(req);
+    console.log("[DEBUG] post-to-facebook deploymentUrl", deploymentUrl);
 
     const funcRes = await fetch(`${deploymentUrl}/functions/v1/post-to-facebook`, {
       method: "POST",
@@ -315,8 +316,19 @@ async function handlePostToFacebook(req: Request): Promise<Response> {
       body: JSON.stringify({ postId }),
     });
 
-    if (!funcRes.ok) throw new Error("Failed to post to Facebook");
-    const data = await funcRes.json();
+    const text = await funcRes.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.error("post-to-facebook function returned non-JSON:", text);
+      throw new Error(`Failed to post to Facebook: non-JSON response (status ${funcRes.status})`);
+    }
+
+    if (!funcRes.ok) {
+      const errMessage = data?.error ? (typeof data.error === "string" ? data.error : JSON.stringify(data.error)) : `HTTP ${funcRes.status}`;
+      throw new Error(`Failed to post to Facebook: ${errMessage}`);
+    }
 
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1045,27 +1057,36 @@ function getDeploymentUrl(req?: Request): string {
   let urlStr = Deno.env.get("DENO_DEPLOYMENT_URL") || "";
   if (urlStr) {
     try {
-      urlStr = new URL(urlStr).origin;
+      const parsed = new URL(urlStr);
+      urlStr = `${parsed.origin}${parsed.pathname.replace(/\/+$|$/, "").replace(/\/+$/, "")}`;
     } catch {
       urlStr = "";
     }
   }
+
   if (!urlStr) {
     const id = Deno.env.get("DENO_DEPLOYMENT_ID");
     if (id && id.length <= 63) {
       urlStr = `https://${id}.deno.dev`;
     }
   }
+
   if (!urlStr && req) {
     try {
-      urlStr = new URL(req.url).origin;
+      const parsed = new URL(req.url);
+      const path = parsed.pathname.replace(/\/+$/, "");
+      const apiIndex = path.indexOf("/api/");
+      const basePath = apiIndex >= 0 ? path.substring(0, apiIndex) : "";
+      urlStr = `${parsed.origin}${basePath}`;
     } catch {
       urlStr = "";
     }
   }
+
   if (!urlStr) {
     urlStr = "http://localhost:8000";
   }
+
   return urlStr.replace(/\/+$/, "");
 }
 

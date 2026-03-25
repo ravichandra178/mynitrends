@@ -257,20 +257,31 @@ async function handlePostToFacebook(req: Request): Promise<Response> {
     // Call the actual post-to-facebook function
     const base = getDeploymentUrl(req);
     const funcRes = await fetch(`${base}/functions/v1/post-to-facebook`, {
-       method: "POST",
-       headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({ postId }),
-     });
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ postId }),
+    });
 
-    if (!funcRes.ok) throw new Error("Failed to post to Facebook");
-    const data = await funcRes.json();
-    
+    const text = await funcRes.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.error("post-to-facebook function returned non-JSON:", text);
+      throw new Error(`Failed to post to Facebook: non-JSON response (status ${funcRes.status})`);
+    }
+
+    if (!funcRes.ok) {
+      const errMessage = data?.error ? (typeof data.error === "string" ? data.error : JSON.stringify(data.error)) : `HTTP ${funcRes.status}`;
+      throw new Error(`Failed to post to Facebook: ${errMessage}`);
+    }
+
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("POST /api/post-to-facebook error:", e);
-    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers: corsHeaders });
   }
 }
 
@@ -335,12 +346,12 @@ async function handleTestConnection(req: Request): Promise<Response> {
 // Helper to determine the deployment base URL for internal function calls
 function getDeploymentUrl(req?: Request): string {
   let urlStr = Deno.env.get("DENO_DEPLOYMENT_URL") || "";
-  // if deployment URL provided, make sure we only keep origin (drop any path)
   if (urlStr) {
     try {
-      urlStr = new URL(urlStr).origin;
+      const parsed = new URL(urlStr);
+      const path = parsed.pathname.replace(/\/+$/, "");
+      urlStr = `${parsed.origin}${path}`;
     } catch {
-      // if it's not a valid URL, ignore it
       urlStr = "";
     }
   }
@@ -352,7 +363,11 @@ function getDeploymentUrl(req?: Request): string {
   }
   if (!urlStr && req) {
     try {
-      urlStr = new URL(req.url).origin;
+      const parsed = new URL(req.url);
+      const path = parsed.pathname.replace(/\/+$/, "");
+      const apiIndex = path.indexOf("/api/");
+      const prefix = apiIndex >= 0 ? path.substring(0, apiIndex) : "";
+      urlStr = `${parsed.origin}${prefix}`;
     } catch {
       urlStr = "";
     }
@@ -360,7 +375,6 @@ function getDeploymentUrl(req?: Request): string {
   if (!urlStr) {
     urlStr = "http://localhost:8000";
   }
-  // strip trailing slash if present
   return urlStr.replace(/\/+$/, "");
 }
 
