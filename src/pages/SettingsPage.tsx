@@ -18,6 +18,7 @@ export default function SettingsPage() {
   const { data: settings, isLoading } = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
   const [form, setForm] = useState({
     facebook_app_id: "",
+    facebook_page_id: "",
     facebook_page_access_token: "",
     auto_post_enabled: false,
     max_posts_per_day: 3,
@@ -47,11 +48,12 @@ export default function SettingsPage() {
     if (settings) {
       setForm({
         facebook_app_id: settings.facebook_app_id || "",
+        facebook_page_id: settings.facebook_page_id || "",
         facebook_page_access_token: settings.facebook_page_access_token ?? "",
         auto_post_enabled: settings.auto_post_enabled ?? false,
         max_posts_per_day: settings.max_posts_per_day ?? 3,
-        groq_model: "llama-3.1-8b-instant", // Default, will be overridden by env vars
-        hf_model: "Qwen/Qwen2.5-7B-Instruct", // Default, will be overridden by env vars
+        groq_model: settings.groq_model || "llama-3.1-8b-instant",
+        hf_model: settings.hf_model || "Qwen/Qwen2.5-7B-Instruct",
       });
     }
   }, [settings]);
@@ -95,7 +97,7 @@ export default function SettingsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          pageId: form.facebook_app_id,
+          pageId: form.facebook_page_id,
           accessToken: form.facebook_page_access_token,
         }),
       });
@@ -267,18 +269,31 @@ export default function SettingsPage() {
             />
           </div>
           <div className="space-y-2">
+            <Label htmlFor="page_id">Page ID</Label>
+            <Input
+              id="page_id"
+              value={form.facebook_page_id}
+              onChange={(e) => setForm({ ...form, facebook_page_id: e.target.value })}
+              placeholder="Enter Facebook Page ID"
+            />
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="access_token">Page Access Token</Label>
             <Input
               id="access_token"
               type="password"
               value={form.facebook_page_access_token}
               onChange={(e) => setForm({ ...form, facebook_page_access_token: e.target.value })}
-              placeholder="Enter Page Access Token"
+              placeholder="Enter Facebook Page Access Token"
             />
           </div>
           <Button variant="outline" size="sm" onClick={testFacebookConnectionUser} disabled={testingAI.facebook}>
             {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-            Test Facebook Connection
+            Test Facebook Page Connection
+          </Button>
+          <Button variant="ghost" size="sm" onClick={testFacebookConnectionEnv} disabled={testingAI.facebook}>
+            {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+            Test Connection via Environment (if no form values)
           </Button>
         </div>
 

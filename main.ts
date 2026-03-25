@@ -1,4 +1,5 @@
 /// <reference lib="deno.window" />
+/// <reference lib="deno.ns" />
 import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 import { generatePost } from "./functions/generate-post.ts";
 import { generateTrends } from "./functions/generate-trends.ts";
@@ -300,6 +301,100 @@ async function handleGenerateTrends(req: Request): Promise<Response> {
   }
 }
 
+async function getSettingsFromDb() {
+  const client = await getConnection();
+  try {
+    const res = await client.queryObject<any>("SELECT * FROM settings LIMIT 1");
+    await client.end();
+    return res.rows[0] || {};
+  } catch (e) {
+    await client.end();
+    throw e;
+  }
+}
+
+async function postToFacebookJob(postId: string): Promise<{ success: boolean; facebookPostId: string }> {
+  const settings = await getSettingsFromDb();
+  const facebookPageId = settings.facebook_page_id || settings.facebook_app_id || Deno.env.get("FACEBOOK_PAGE_ID") || "";
+  const facebookAccessToken = settings.facebook_page_access_token || Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") || "";
+
+  if (!facebookPageId || !facebookAccessToken) {
+    throw new Error("FACEBOOK_PAGE_ID and FACEBOOK_PAGE_ACCESS_TOKEN must be configured either in settings or environment");
+  }
+
+  const client = await getConnection();
+  try {
+    const postResult = await client.queryObject<any>("SELECT * FROM posts WHERE id = $1", [postId]);
+    const post = postResult.rows?.[0];
+
+    if (!post) {
+      throw new Error("Post not found");
+    }
+    if (post.posted) {
+      throw new Error("Already posted");
+    }
+
+    let fbPostId: string;
+
+    if (post.image_url) {
+      let imageBlob: Blob;
+
+      if (post.image_url.startsWith("data:")) {
+        const parts = post.image_url.split(",");
+        const bstr = atob(parts[1]);
+        const n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        for (let i = 0; i < n; i++) {
+          u8arr[i] = bstr.charCodeAt(i);
+        }
+        imageBlob = new Blob([u8arr], { type: "image/png" });
+      } else {
+        const imgRes = await fetch(post.image_url);
+        if (!imgRes.ok) {
+          throw new Error(`Could not download image URL: ${imgRes.status}`);
+        }
+        imageBlob = await imgRes.blob();
+      }
+
+      const formData = new FormData();
+      formData.append("source", imageBlob, "image.png");
+      formData.append("caption", post.content);
+      formData.append("access_token", facebookAccessToken);
+
+      const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/photos`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const fbData = await fbRes.json();
+      if (fbData.error) {
+        throw new Error(fbData.error.message || JSON.stringify(fbData.error));
+      }
+
+      fbPostId = fbData.post_id || fbData.id;
+    } else {
+      const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/feed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: post.content, access_token: facebookAccessToken }),
+      });
+
+      const fbData = await fbRes.json();
+      if (fbData.error) {
+        throw new Error(fbData.error.message || JSON.stringify(fbData.error));
+      }
+
+      fbPostId = fbData.id;
+    }
+
+    await client.queryObject("UPDATE posts SET posted = true, facebook_post_id = $1 WHERE id = $2", [fbPostId, postId]);
+
+    return { success: true, facebookPostId: fbPostId };
+  } finally {
+    await client.end();
+  }
+}
+
 async function handlePostToFacebook(req: Request): Promise<Response> {
   try {
     const { postId } = await req.json();
@@ -307,35 +402,15 @@ async function handlePostToFacebook(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: "Missing postId" }), { status: 400, headers: corsHeaders });
     }
 
-    const deploymentUrl = getDeploymentUrl(req);
-    console.log("[DEBUG] post-to-facebook deploymentUrl", deploymentUrl);
+    const result = await postToFacebookJob(postId);
 
-    const funcRes = await fetch(`${deploymentUrl}/functions/v1/post-to-facebook`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ postId }),
-    });
-
-    const text = await funcRes.text();
-    let data: any;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      console.error("post-to-facebook function returned non-JSON:", text);
-      throw new Error(`Failed to post to Facebook: non-JSON response (status ${funcRes.status})`);
-    }
-
-    if (!funcRes.ok) {
-      const errMessage = data?.error ? (typeof data.error === "string" ? data.error : JSON.stringify(data.error)) : `HTTP ${funcRes.status}`;
-      throw new Error(`Failed to post to Facebook: ${errMessage}`);
-    }
-
-    return new Response(JSON.stringify(data), {
+    return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("POST /api/post-to-facebook error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers: corsHeaders });
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    console.error("POST /api/post-to-facebook error:", errorMessage);
+    return new Response(JSON.stringify({ error: errorMessage }), { status: 500, headers: corsHeaders });
   }
 }
 
@@ -394,28 +469,38 @@ async function handleGenerateAutoreply(req: Request): Promise<Response> {
 
 async function handleTestConnection(req: Request): Promise<Response> {
   try {
-    const { pageId, accessToken } = await req.json();
-    if (!pageId || !accessToken) {
-      return new Response(JSON.stringify({ error: "Missing pageId or accessToken" }), { status: 400, headers: corsHeaders });
+    const body = await req.json();
+    const pageId = body.pageId || undefined;
+    const accessToken = body.accessToken || undefined;
+
+    const settings = await getSettingsFromDb();
+    const resolvedPageId = pageId || settings.facebook_page_id || settings.facebook_app_id || Deno.env.get("FACEBOOK_PAGE_ID");
+    const resolvedAccessToken = accessToken || settings.facebook_page_access_token || Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN");
+
+    if (!resolvedAccessToken) {
+      return new Response(JSON.stringify({ success: false, error: "Missing accessToken" }), { status: 400, headers: corsHeaders });
     }
 
-    const deploymentUrl = getDeploymentUrl(req);
-    
-    const funcRes = await fetch(`${deploymentUrl}/functions/v1/test-connection`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pageId, accessToken }),
-    });
+    const fbUrl = resolvedPageId
+      ? `https://graph.facebook.com/${resolvedPageId}?fields=name,id&access_token=${resolvedAccessToken}`
+      : `https://graph.facebook.com/me?fields=id,name&access_token=${resolvedAccessToken}`;
 
-    if (!funcRes.ok) throw new Error("Failed to test connection");
-    const data = await funcRes.json();
-    
-    return new Response(JSON.stringify(data), {
+    const fbRes = await fetch(fbUrl);
+    const fbData = await fbRes.json();
+
+    if (fbData.error) {
+      return new Response(JSON.stringify({ success: false, error: fbData.error.message }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ success: true, name: fbData.name, id: fbData.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("POST /api/test-connection error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers: corsHeaders });
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    console.error("POST /api/test-connection error:", errorMessage);
+    return new Response(JSON.stringify({ success: false, error: errorMessage }), { status: 500, headers: corsHeaders });
   }
 }
 
