@@ -1434,34 +1434,29 @@ Deno.serve(async (req) => {
 
 async function handleTestFacebookPost(req: Request): Promise<Response> {
   try {
-    const { pageId, accessToken, imageUrl, message } = await req.json();
+    const { pageId, accessToken, imageUrl, title, description, message } = await req.json();
 
     if (!pageId || !accessToken) {
       return new Response(JSON.stringify({ success: false, error: "Missing pageId or accessToken" }), { status: 400, headers: corsHeaders });
     }
-
-    if (!message && !imageUrl) {
-      return new Response(JSON.stringify({ success: false, error: "Provide message or imageUrl" }), { status: 400, headers: corsHeaders });
+    if (!imageUrl) {
+      return new Response(JSON.stringify({ success: false, error: "Missing imageUrl" }), { status: 400, headers: corsHeaders });
     }
 
-    let fbRes;
-    if (imageUrl) {
-      const formData = new FormData();
-      formData.append("url", imageUrl);
-      if (message) formData.append("caption", message);
-      formData.append("access_token", accessToken);
+    let caption = "";
+    if (title) caption += title;
+    if (description) caption += (caption ? "\n" : "") + description;
+    if (message) caption += (caption ? "\n" : "") + message;
 
-      fbRes = await fetch(`https://graph.facebook.com/${pageId}/photos`, {
-        method: "POST",
-        body: formData,
-      });
-    } else {
-      fbRes = await fetch(`https://graph.facebook.com/${pageId}/feed`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, access_token: accessToken }),
-      });
-    }
+    const formData = new FormData();
+    formData.append("url", imageUrl);
+    if (caption) formData.append("caption", caption);
+    formData.append("access_token", accessToken);
+
+    const fbRes = await fetch(`https://graph.facebook.com/${pageId}/photos`, {
+      method: "POST",
+      body: formData,
+    });
 
     const fbData = await fbRes.json();
     if (fbData.error) {

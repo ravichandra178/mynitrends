@@ -21,6 +21,8 @@ export default function SettingsPage() {
     facebook_page_id: "",
     facebook_page_access_token: "",
     facebook_image_url: "",
+    facebook_image_title: "",
+    facebook_image_description: "",
     facebook_image_message: "Test Facebook image post",
     auto_post_enabled: false,
     max_posts_per_day: 3,
@@ -53,6 +55,8 @@ export default function SettingsPage() {
         facebook_page_id: settings.facebook_page_id || "",
         facebook_page_access_token: settings.facebook_page_access_token ?? "",
         facebook_image_url: settings.facebook_image_url || "",
+        facebook_image_title: settings.facebook_image_title || "",
+        facebook_image_description: settings.facebook_image_description || "",
         facebook_image_message: settings.facebook_image_message || "Test Facebook image post",
         auto_post_enabled: settings.auto_post_enabled ?? false,
         max_posts_per_day: settings.max_posts_per_day ?? 3,
@@ -266,6 +270,8 @@ export default function SettingsPage() {
           pageId: form.facebook_page_id || form.facebook_app_id,
           accessToken: form.facebook_page_access_token,
           imageUrl: form.facebook_image_url,
+          title: form.facebook_image_title,
+          description: form.facebook_image_description,
           message: form.facebook_image_message,
         }),
       });
@@ -559,6 +565,50 @@ export default function SettingsPage() {
           >
             {saveMutation.isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
             Save Settings
+          </Button>
+        </div>
+
+        <div className="space-y-4 border rounded-lg p-4">
+          <h3 className="text-sm font-medium">Facebook Image Post Test</h3>
+          <div className="space-y-2">
+            <Label htmlFor="image_url">Image URL</Label>
+            <Input
+              id="image_url"
+              value={form.facebook_image_url}
+              onChange={(e) => setForm({ ...form, facebook_image_url: e.target.value })}
+              placeholder="https://example.com/photo.jpg"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="image_title">Image Title</Label>
+            <Input
+              id="image_title"
+              value={form.facebook_image_title}
+              onChange={(e) => setForm({ ...form, facebook_image_title: e.target.value })}
+              placeholder="Your image title"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="image_description">Image Description</Label>
+            <Input
+              id="image_description"
+              value={form.facebook_image_description}
+              onChange={(e) => setForm({ ...form, facebook_image_description: e.target.value })}
+              placeholder="Description for your image"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="image_message">Message</Label>
+            <Input
+              id="image_message"
+              value={form.facebook_image_message}
+              onChange={(e) => setForm({ ...form, facebook_image_message: e.target.value })}
+              placeholder="Caption for your post"
+            />
+          </div>
+          <Button variant="outline" size="sm" onClick={testFacebookImagePost} disabled={testingAI.facebook}>
+            {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+            Test Facebook Image Post
           </Button>
         </div>
       </div>
