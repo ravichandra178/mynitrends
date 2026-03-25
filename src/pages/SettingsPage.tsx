@@ -20,6 +20,8 @@ export default function SettingsPage() {
     facebook_app_id: "",
     facebook_page_id: "",
     facebook_page_access_token: "",
+    facebook_image_url: "",
+    facebook_image_message: "Test Facebook image post",
     auto_post_enabled: false,
     max_posts_per_day: 3,
     groq_model: "llama-3.1-8b-instant",
@@ -50,6 +52,8 @@ export default function SettingsPage() {
         facebook_app_id: settings.facebook_app_id || "",
         facebook_page_id: settings.facebook_page_id || "",
         facebook_page_access_token: settings.facebook_page_access_token ?? "",
+        facebook_image_url: settings.facebook_image_url || "",
+        facebook_image_message: settings.facebook_image_message || "Test Facebook image post",
         auto_post_enabled: settings.auto_post_enabled ?? false,
         max_posts_per_day: settings.max_posts_per_day ?? 3,
         groq_model: settings.groq_model || "llama-3.1-8b-instant",
@@ -249,6 +253,34 @@ export default function SettingsPage() {
       toast.error(`Post generation test failed: ${e.message}`);
     } finally {
       setTestingAI(prev => ({ ...prev, generatePost: false }));
+    }
+  };
+
+  const testFacebookImagePost = async () => {
+    setTestingAI(prev => ({ ...prev, facebook: true }));
+    try {
+      const response = await fetch(`${API_BASE}/api/test-facebook-post`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pageId: form.facebook_page_id || form.facebook_app_id,
+          accessToken: form.facebook_page_access_token,
+          imageUrl: form.facebook_image_url,
+          message: form.facebook_image_message,
+        }),
+      });
+      const result = await response.json();
+      setTestResults(prev => ({ ...prev, facebook: result }));
+      if (result.success) {
+        toast.success(`Facebook image post successful: ${result.facebookPostId || result.id}`);
+      } else {
+        toast.error(`Facebook image post failed: ${result.error}`);
+      }
+    } catch (e: any) {
+      setTestResults(prev => ({ ...prev, facebook: { success: false, error: e.message } }));
+      toast.error(`Facebook image post failed: ${e.message}`);
+    } finally {
+      setTestingAI(prev => ({ ...prev, facebook: false }));
     }
   };
 

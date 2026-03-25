@@ -1370,6 +1370,7 @@ Deno.serve(async (req) => {
       const appId = Deno.env.get("FACEBOOK_APP_ID") || "";
       return new Response(JSON.stringify({ appId }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+    if (path === "/api/test-facebook-post" && method === "POST") return await handleTestFacebookPost(req);
   } catch (e) {
     console.error(`Error handling ${method} ${path}:`, e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
@@ -1430,3 +1431,49 @@ Deno.serve(async (req) => {
 
   return new Response("Not found", { status: 404, headers: corsHeaders });
 });
+
+async function handleTestFacebookPost(req: Request): Promise<Response> {
+  try {
+    const { pageId, accessToken, imageUrl, message } = await req.json();
+
+    if (!pageId || !accessToken) {
+      return new Response(JSON.stringify({ success: false, error: "Missing pageId or accessToken" }), { status: 400, headers: corsHeaders });
+    }
+
+    if (!message && !imageUrl) {
+      return new Response(JSON.stringify({ success: false, error: "Provide message or imageUrl" }), { status: 400, headers: corsHeaders });
+    }
+
+    let fbRes;
+    if (imageUrl) {
+      const formData = new FormData();
+      formData.append("url", imageUrl);
+      if (message) formData.append("caption", message);
+      formData.append("access_token", accessToken);
+
+      fbRes = await fetch(`https://graph.facebook.com/${pageId}/photos`, {
+        method: "POST",
+        body: formData,
+      });
+    } else {
+      fbRes = await fetch(`https://graph.facebook.com/${pageId}/feed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, access_token: accessToken }),
+      });
+    }
+
+    const fbData = await fbRes.json();
+    if (fbData.error) {
+      throw new Error(fbData.error.message || JSON.stringify(fbData.error));
+    }
+
+    return new Response(JSON.stringify({ success: true, ...fbData }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    const err = e instanceof Error ? e.message : String(e);
+    console.error("POST /api/test-facebook-post error:", err);
+    return new Response(JSON.stringify({ success: false, error: err }), { status: 500, headers: corsHeaders });
+  }
+}
