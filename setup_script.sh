@@ -4,49 +4,49 @@
 # ====== CONFIG ======
 APP_ID="1208364057636571"
 APP_SECRET="12387df709e47544d764cf35093e5c59"
-SHORT_LIVED_TOKEN="EAARLAC5qLtsBRAdZAWZANEemh5vyC8VNQQZCkjVNor49CjtOVWAhQq8DlznJewg4aLzcTSYhsNgpc33LgHNZAbPNGOYobmnJZCHoJwqpHP6zuMs9ZApN8ZAEyeMeaYbW5IajcDniooPlSuyZBZBnnogTd6ZBQhBun8vi3koGZA3JWAPzjNP3Igjv63NVOAXPHxpyRl3asQMkaP58JOZBgZARR5oIuFxfvsMWft9b7r1dvCwwHKI9h"
+SHORT_TOKEN="EAARLAC5qLtsBRPUFBdEZBeKUHrZAAMKgoCquhZAXdtaWmq7EFgPmC14cxCOddZC0wM2noei4lOHPKLwFyI7pjESO1dPZCcj3D3z3FwNFsTTHTz1VsRFgJ1wD1rsUSSRGpAd7b1HfUzx512ETQyhZA59K7YI2WdILEs3rCfOWobaf1E929ZC8G5hdFZATAiZCJeBFWxZCsO3l8KsRba0Gi7ZCLr3SiEO14pi1gh6JWZCZBMIYZD"
 
 
-# ====== STEP 1: Exchange for Long-Lived User Token ======
-echo "Getting long-lived user token..."
+# ========= STEP 1: Exchange for Long-Lived User Token =========
+echo "🔄 Exchanging for long-lived user token..."
 
+LONG_RES=$(curl -s -G "https://graph.facebook.com/v19.0/oauth/access_token" \
+  --data-urlencode "grant_type=fb_exchange_token" \
+  --data-urlencode "client_id=$APP_ID" \
+  --data-urlencode "client_secret=$APP_SECRET" \
+  --data-urlencode "fb_exchange_token=$SHORT_TOKEN")
 
-LONG_LIVED_RESPONSE=$(curl -s "https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=$APP_ID&client_secret=$APP_SECRET&fb_exchange_token=$SHORT_LIVED_TOKEN")
+LONG_TOKEN=$(echo "$LONG_RES" | jq -r '.access_token')
 
-
-LONG_LIVED_TOKEN=$(echo $LONG_LIVED_RESPONSE | jq -r '.access_token')
-
-
-if [ "$LONG_LIVED_TOKEN" == "null" ]; then
- echo "❌ Failed to get long-lived token"
- echo "$LONG_LIVED_RESPONSE"
- exit 1
+if [ "$LONG_TOKEN" == "null" ] || [ -z "$LONG_TOKEN" ]; then
+  echo "❌ Failed to get long-lived user token"
+  echo "$LONG_RES"
+  exit 1
 fi
-
 
 echo "✅ Long-lived user token obtained"
 
+# ========= STEP 2: Get Page Tokens =========
+echo "📄 Fetching pages..."
 
-# ====== STEP 2: Get Page Access Token ======
-echo "Fetching page access tokens..."
+PAGES_RES=$(curl -s -G "https://graph.facebook.com/v19.0/me/accounts" \
+  --data-urlencode "access_token=$LONG_TOKEN")
 
+echo "$PAGES_RES" | jq
 
-PAGES_RESPONSE=$(curl -s "https://graph.facebook.com/v19.0/me/accounts?access_token=$LONG_LIVED_TOKEN")
+# ========= STEP 3: Extract Page Token =========
+PAGE_TOKEN=$(echo "$PAGES_RES" | jq -r '.data[0].access_token')
+PAGE_NAME=$(echo "$PAGES_RES" | jq -r '.data[0].name')
 
-
-echo "$PAGES_RESPONSE" | jq
-
-
-PAGE_TOKEN=$(echo $PAGES_RESPONSE | jq -r '.data[0].access_token')
-
-
-if [ "$PAGE_TOKEN" == "null" ]; then
- echo "❌ Failed to get page token"
- exit 1
+if [ "$PAGE_TOKEN" == "null" ] || [ -z "$PAGE_TOKEN" ]; then
+  echo "❌ No page token found"
+  exit 1
 fi
 
-
-echo "✅ Page Access Token:"
+echo ""
+echo "🎉 SUCCESS"
+echo "Page Name: $PAGE_NAME"
+echo "Page Access Token:"
 echo "$PAGE_TOKEN"
 
 # "category": "Educational research centre",

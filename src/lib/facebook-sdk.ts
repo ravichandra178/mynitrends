@@ -21,7 +21,7 @@ export async function initFacebookSDK(): Promise<void> {
     throw new Error("FACEBOOK_APP_ID not configured in environment variables");
   }
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     if (window.FB) {
       resolve();
       return;
@@ -44,6 +44,13 @@ export async function initFacebookSDK(): Promise<void> {
     script.src = "https://connect.facebook.net/en_US/sdk.js";
     script.async = true;
     script.defer = true;
+    script.onload = () => {
+      console.log("[FB SDK] script loaded");
+    };
+    script.onerror = (e) => {
+      console.error("[FB SDK] Failed to load SDK script", e);
+      reject(new Error("Failed to load Facebook SDK script"));
+    };
     document.body.appendChild(script);
   });
 }

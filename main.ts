@@ -1491,10 +1491,17 @@ Deno.serve(async (req) => {
     if (path === "/api/test-generate-post" && method === "POST") return await handleTestGeneratePost(req);
     if (path === "/api/system-status" && method === "GET") return await handleSystemStatus(req);
     if (path === "/api/facebook-app-id" && method === "GET") {
-      const appId = Deno.env.get("FACEBOOK_APP_ID") || "";
-      return new Response(JSON.stringify({ appId }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      let appId = Deno.env.get("FACEBOOK_APP_ID") || "";
+      if (!appId) {
+        try {
+          const settings = await getSettingsFromDb();
+          appId = settings.facebook_app_id || settings.facebook_page_id || "";
+        } catch (e) {
+          console.warn("Could not read settings for facebook app id:", e);
+        }
+      }
+      return new Response(JSON.stringify({ appId: appId || "" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    if (path === "/api/test-facebook-post" && method === "POST") return await handleTestFacebookPost(req);
   } catch (e) {
     console.error(`Error handling ${method} ${path}:`, e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
