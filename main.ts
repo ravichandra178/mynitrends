@@ -201,28 +201,47 @@ async function handleSettingsUpdate(req: Request): Promise<Response> {
   try {
     const body = await req.json();
     const client = await getConnection();
-    
+
     // Ensure settings row exists
     await client.queryObject("INSERT INTO settings DEFAULT VALUES ON CONFLICT DO NOTHING");
-    
-    // Build update query
+
+    const allowedFields = new Set([
+      "openai_api_key",
+      "facebook_app_id",
+      "facebook_page_id",
+      "facebook_page_access_token",
+      "auto_post_enabled",
+      "max_posts_per_day",
+      "groq_model",
+      "hf_model",
+      "facebook_image_url",
+      "facebook_image_title",
+      "facebook_image_description",
+      "facebook_image_message",
+    ]);
+
+    const keys = Object.keys(body).filter((k) => allowedFields.has(k));
+    if (keys.length === 0) {
+      await client.end();
+      return new Response(JSON.stringify({ error: "No valid settings keys provided" }), { status: 400, headers: corsHeaders });
+    }
+
     let query = "UPDATE settings SET ";
     const values: any[] = [];
     let paramCount = 1;
-    
-    const keys = Object.keys(body);
+
     for (let i = 0; i < keys.length; i++) {
       if (i > 0) query += ", ";
       query += `${keys[i]} = $${paramCount}`;
       values.push(body[keys[i]]);
       paramCount++;
     }
-    
-    query += " RETURNING *";
-    
+
+    query += " WHERE id = (SELECT id FROM settings LIMIT 1) RETURNING *";
+
     const result = await client.queryObject(query, values);
     await client.end();
-    
+
     return new Response(JSON.stringify(result.rows[0]), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -1330,6 +1349,7 @@ async function initializeDatabaseSchema() {
         CREATE TABLE IF NOT EXISTS public.settings (
           id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
           openai_api_key TEXT DEFAULT '',
+          facebook_app_id TEXT DEFAULT '',
           facebook_page_id TEXT DEFAULT '',
           facebook_page_access_token TEXT DEFAULT '',
           auto_post_enabled BOOLEAN NOT NULL DEFAULT false,

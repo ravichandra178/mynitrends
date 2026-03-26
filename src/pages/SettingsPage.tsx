@@ -386,7 +386,7 @@ export default function SettingsPage() {
             </Button>
             <Button variant="ghost" size="sm" onClick={testFacebookConnectionEnv} disabled={testingAI.facebook}>
               {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              Test Connection via Environment (if no form values)
+              DEFAULT ENV TEST
             </Button>
           </div>
 
