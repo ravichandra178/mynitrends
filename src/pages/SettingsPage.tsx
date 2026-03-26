@@ -348,348 +348,352 @@ export default function SettingsPage() {
   return (
     <Layout>
       <PageHeader title="Settings" description="Configure API keys and automation preferences" />
-      <div className="max-w-lg space-y-6">
-        <div className="space-y-4 border rounded-lg p-4">
-          <h3 className="text-sm font-medium">Facebook Configuration</h3>
-          <div className="space-y-2">
-            <Label htmlFor="app_id">App ID</Label>
-            <Input
-              id="app_id"
-              value={form.facebook_app_id}
-              onChange={(e) => setForm({ ...form, facebook_app_id: e.target.value })}
-              placeholder="Enter Facebook App ID"
-            />
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-1">
+          <div className="space-y-4 border rounded-lg p-4">
+            <h3 className="text-sm font-medium">Facebook Configuration</h3>
+            <div className="space-y-2">
+              <Label htmlFor="app_id">App ID</Label>
+              <Input
+                id="app_id"
+                value={form.facebook_app_id}
+                onChange={(e) => setForm({ ...form, facebook_app_id: e.target.value })}
+                placeholder="Enter Facebook App ID"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="page_id">Page ID</Label>
+              <Input
+                id="page_id"
+                value={form.facebook_page_id}
+                onChange={(e) => setForm({ ...form, facebook_page_id: e.target.value })}
+                placeholder="Enter Facebook Page ID"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="access_token">Page Access Token</Label>
+              <Input
+                id="access_token"
+                type="password"
+                value={form.facebook_page_access_token}
+                onChange={(e) => setForm({ ...form, facebook_page_access_token: e.target.value })}
+                placeholder="Enter Facebook Page Access Token"
+              />
+            </div>
+            <Button variant="outline" size="sm" onClick={testFacebookConnectionUser} disabled={testingAI.facebook}>
+              {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Test Facebook Page Connection
+            </Button>
+            <Button variant="ghost" size="sm" onClick={testFacebookConnectionEnv} disabled={testingAI.facebook}>
+              {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Test Connection via Environment (if no form values)
+            </Button>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="page_id">Page ID</Label>
-            <Input
-              id="page_id"
-              value={form.facebook_page_id}
-              onChange={(e) => setForm({ ...form, facebook_page_id: e.target.value })}
-              placeholder="Enter Facebook Page ID"
-            />
+
+          <div className="space-y-4 border rounded-lg p-4">
+            <h3 className="text-sm font-medium">Automation Settings</h3>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="auto_post_enabled" className="mr-4">Enable Auto Posting</Label>
+              <Switch
+                id="auto_post_enabled"
+                checked={form.auto_post_enabled}
+                onCheckedChange={(checked) => setForm({ ...form, auto_post_enabled: checked })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="max_posts_per_day">Max Posts Per Day</Label>
+              <Input
+                id="max_posts_per_day"
+                type="number"
+                value={form.max_posts_per_day}
+                onChange={(e) => setForm({ ...form, max_posts_per_day: Number(e.target.value) })}
+                placeholder="Enter max posts per day"
+              />
+            </div>
+            <Button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isLoading}
+            >
+              {saveMutation.isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save Settings
+            </Button>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="access_token">Page Access Token</Label>
-            <Input
-              id="access_token"
-              type="password"
-              value={form.facebook_page_access_token}
-              onChange={(e) => setForm({ ...form, facebook_page_access_token: e.target.value })}
-              placeholder="Enter Facebook Page Access Token"
-            />
-          </div>
-          <Button variant="outline" size="sm" onClick={testFacebookConnectionUser} disabled={testingAI.facebook}>
-            {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-            Test Facebook Page Connection
-          </Button>
-          <Button variant="ghost" size="sm" onClick={testFacebookConnectionEnv} disabled={testingAI.facebook}>
-            {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-            Test Connection via Environment (if no form values)
-          </Button>
         </div>
 
-        <div className="space-y-4 border rounded-lg p-4">
-          <h3 className="text-sm font-medium">AI Model Testing</h3>
-          <p className="text-xs text-muted-foreground">Test your AI models and RSS feed connectivity</p>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="groq_model">GROQ Model</Label>
-              <Input
-                id="groq_model"
-                value={form.groq_model}
-                onChange={(e) => setForm({ ...form, groq_model: e.target.value })}
-                placeholder="llama-3.1-8b-instant"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="hf_model">Hugging Face Model</Label>
-              <Input
-                id="hf_model"
-                value={form.hf_model}
-                onChange={(e) => setForm({ ...form, hf_model: e.target.value })}
-                placeholder="Qwen/Qwen2.5-7B-Instruct"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 border rounded">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">🤖</div>
-                <div>
-                  <div className="font-medium">GROQ API</div>
-                  <div className="text-xs text-muted-foreground">{form.groq_model}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {testResults.groq && (
-                  <div className="flex items-center gap-1">
-                    {testResults.groq.success ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="text-xs">
-                      {testResults.groq.success ? "Working" : "Failed"}
-                    </span>
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={testGROQConnection}
-                  disabled={testingAI.groq}
-                >
-                  {testingAI.groq ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  Test
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-3 border rounded">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">🤗</div>
-                <div>
-                  <div className="font-medium">Hugging Face</div>
-                  <div className="text-xs text-muted-foreground">{form.hf_model}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {testResults.huggingface && (
-                  <div className="flex items-center gap-1">
-                    {testResults.huggingface.success ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="text-xs">
-                      {testResults.huggingface.success ? "Working" : "Failed"}
-                    </span>
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={testHFConnection}
-                  disabled={testingAI.huggingface}
-                >
-                  {testingAI.huggingface ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  Test
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-3 border rounded">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">🖼️</div>
-                <div>
-                  <div className="font-medium">HF Image Generation</div>
-                  <div className="text-xs text-muted-foreground">HF_MODEL env var</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {testResults.hfImage && (
-                  <div className="flex items-center gap-1">
-                    {testResults.hfImage.success ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="text-xs">
-                      {testResults.hfImage.success ? "Working" : "Failed"}
-                    </span>
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={testHFImageGeneration}
-                  disabled={testingAI.hfImage}
-                >
-                  {testingAI.hfImage ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  Test
-                </Button>
-              </div>
-            </div>
-
-            {testResults.hfImage?.success && testResults.hfImage?.imageUrl && (
-              <div className="p-3 border rounded bg-gray-50">
-                <p className="text-xs text-muted-foreground mb-2">Generated test image ({testResults.hfImage.sizeKB}KB):</p>
-                <img
-                  src={testResults.hfImage.imageUrl}
-                  alt="HF Test Image"
-                  className="w-full max-w-[256px] rounded-lg border"
+        <div className="space-y-6 lg:col-span-2">
+          <div className="space-y-4 border rounded-lg p-4">
+            <h3 className="text-sm font-medium">AI Model Testing</h3>
+            <p className="text-xs text-muted-foreground">Test your AI models and RSS feed connectivity</p>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="groq_model">GROQ Model</Label>
+                <Input
+                  id="groq_model"
+                  value={form.groq_model}
+                  onChange={(e) => setForm({ ...form, groq_model: e.target.value })}
+                  placeholder="llama-3.1-8b-instant"
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="hf_model">Hugging Face Model</Label>
+                <Input
+                  id="hf_model"
+                  value={form.hf_model}
+                  onChange={(e) => setForm({ ...form, hf_model: e.target.value })}
+                  placeholder="Qwen/Qwen2.5-7B-Instruct"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 border rounded">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">🤖</div>
+                  <div>
+                    <div className="font-medium">GROQ API</div>
+                    <div className="text-xs text-muted-foreground">{form.groq_model}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {testResults.groq && (
+                    <div className="flex items-center gap-1">
+                      {testResults.groq.success ? (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-500" />
+                      )}
+                      <span className="text-xs">
+                        {testResults.groq.success ? "Working" : "Failed"}
+                      </span>
+                    </div>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={testGROQConnection}
+                    disabled={testingAI.groq}
+                  >
+                    {testingAI.groq ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                    Test
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 border rounded">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">🤗</div>
+                  <div>
+                    <div className="font-medium">Hugging Face</div>
+                    <div className="text-xs text-muted-foreground">{form.hf_model}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {testResults.huggingface && (
+                    <div className="flex items-center gap-1">
+                      {testResults.huggingface.success ? (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-500" />
+                      )}
+                      <span className="text-xs">
+                        {testResults.huggingface.success ? "Working" : "Failed"}
+                      </span>
+                    </div>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={testHFConnection}
+                    disabled={testingAI.huggingface}
+                  >
+                    {testingAI.huggingface ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                    Test
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 border rounded">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">🖼️</div>
+                  <div>
+                    <div className="font-medium">HF Image Generation</div>
+                    <div className="text-xs text-muted-foreground">HF_MODEL env var</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {testResults.hfImage && (
+                    <div className="flex items-center gap-1">
+                      {testResults.hfImage.success ? (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-500" />
+                      )}
+                      <span className="text-xs">
+                        {testResults.hfImage.success ? "Working" : "Failed"}
+                      </span>
+                    </div>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={testHFImageGeneration}
+                    disabled={testingAI.hfImage}
+                  >
+                    {testingAI.hfImage ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                    Test
+                  </Button>
+                </div>
+              </div>
+
+              {testResults.hfImage?.success && testResults.hfImage?.imageUrl && (
+                <div className="p-3 border rounded bg-gray-50">
+                  <p className="text-xs text-muted-foreground mb-2">Generated test image ({testResults.hfImage.sizeKB}KB):</p>
+                  <img
+                    src={testResults.hfImage.imageUrl}
+                    alt="HF Test Image"
+                    className="w-full max-w-[256px] rounded-lg border"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-between p-3 border rounded">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">📊</div>
+                  <div>
+                    <div className="font-medium">HF Trends Generation</div>
+                    <div className="text-xs text-muted-foreground">{form.hf_model} → trends</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {testResults.hfTrends && (
+                    <div className="flex items-center gap-1">
+                      {testResults.hfTrends.success ? (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-500" />
+                      )}
+                      <span className="text-xs">
+                        {testResults.hfTrends.success ? "Working" : "Failed"}
+                      </span>
+                    </div>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={testHFTrendsGeneration}
+                    disabled={testingAI.hfTrends}
+                  >
+                    {testingAI.hfTrends ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                    Test
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 border rounded">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">📝</div>
+                  <div>
+                    <div className="font-medium">Post Generation</div>
+                    <div className="text-xs text-muted-foreground">Auto post topic</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {testResults.generatePost && (
+                    <div className="flex items-center gap-1">
+                      {testResults.generatePost.success ? (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-500" />
+                      )}
+                      <span className="text-xs">
+                        {testResults.generatePost.success ? "Working" : "Failed"}
+                      </span>
+                    </div>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={testGeneratePost}
+                    disabled={testingAI.generatePost}
+                  >
+                    {testingAI.generatePost ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                    Test
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4 border rounded-lg p-4">
+            <h3 className="text-sm font-medium">Facebook Image Post Test</h3>
+            <div className="space-y-2">
+              <Label htmlFor="image_url">Image URL</Label>
+              <Input
+                id="image_url"
+                value={form.facebook_image_url}
+                onChange={(e) => setForm({ ...form, facebook_image_url: e.target.value })}
+                placeholder="https://example.com/photo.jpg"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="image_title">Image Title</Label>
+              <Input
+                id="image_title"
+                value={form.facebook_image_title}
+                onChange={(e) => setForm({ ...form, facebook_image_title: e.target.value })}
+                placeholder="Your image title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="image_description">Image Description</Label>
+              <Input
+                id="image_description"
+                value={form.facebook_image_description}
+                onChange={(e) => setForm({ ...form, facebook_image_description: e.target.value })}
+                placeholder="Description for your image"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="image_message">Message</Label>
+              <Input
+                id="image_message"
+                value={form.facebook_image_message}
+                onChange={(e) => setForm({ ...form, facebook_image_message: e.target.value })}
+                placeholder="Caption for your post"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="image_file">Upload Local Image</Label>
+              <Input
+                id="image_file"
+                type="file"
+                accept="image/*"
+                onChange={(e) => setFacebookFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <Button variant="outline" size="sm" onClick={testFacebookImagePost} disabled={testingAI.facebook}>
+                {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Test Facebook Image Post
+              </Button>
+              <Button variant="secondary" size="sm" onClick={testFacebookImageUpload} disabled={testingAI.facebook || !facebookFile}>
+                {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Upload Local Image Test
+              </Button>
+              <Button variant="ghost" size="sm" onClick={loadFacebookEnv}>
+                Load from Env
+              </Button>
+            </div>
+            {(envPreview.facebook_app_id || envPreview.facebook_page_id || envPreview.facebook_page_access_token) && (
+              <div className="mt-3 p-3 border rounded bg-slate-50 text-sm">
+                <div className="font-medium">Env values loaded</div>
+                <div className="mt-1">App ID: {envPreview.facebook_app_id}</div>
+                <div>Page ID: {envPreview.facebook_page_id}</div>
+                <div>Page Access Token: {envPreview.facebook_page_access_token}</div>
+              </div>
             )}
-
-            <div className="flex items-center justify-between p-3 border rounded">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">📊</div>
-                <div>
-                  <div className="font-medium">HF Trends Generation</div>
-                  <div className="text-xs text-muted-foreground">{form.hf_model} → trends</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {testResults.hfTrends && (
-                  <div className="flex items-center gap-1">
-                    {testResults.hfTrends.success ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="text-xs">
-                      {testResults.hfTrends.success ? "Working" : "Failed"}
-                    </span>
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={testHFTrendsGeneration}
-                  disabled={testingAI.hfTrends}
-                >
-                  {testingAI.hfTrends ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  Test
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-3 border rounded">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">📝</div>
-                <div>
-                  <div className="font-medium">Post Generation</div>
-                  <div className="text-xs text-muted-foreground">Auto post topic</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {testResults.generatePost && (
-                  <div className="flex items-center gap-1">
-                    {testResults.generatePost.success ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="text-xs">
-                      {testResults.generatePost.success ? "Working" : "Failed"}
-                    </span>
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={testGeneratePost}
-                  disabled={testingAI.generatePost}
-                >
-                  {testingAI.generatePost ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  Test
-                </Button>
-              </div>
-            </div>
           </div>
-        </div>
-
-        <div className="space-y-4 border rounded-lg p-4">
-          <h3 className="text-sm font-medium">Automation Settings</h3>
-          <div className="flex items-center justify-between">
-            <Label htmlFor="auto_post_enabled" className="mr-4">Enable Auto Posting</Label>
-            <Switch
-              id="auto_post_enabled"
-              checked={form.auto_post_enabled}
-              onCheckedChange={(checked) => setForm({ ...form, auto_post_enabled: checked })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="max_posts_per_day">Max Posts Per Day</Label>
-            <Input
-              id="max_posts_per_day"
-              type="number"
-              value={form.max_posts_per_day}
-              onChange={(e) => setForm({ ...form, max_posts_per_day: Number(e.target.value) })}
-              placeholder="Enter max posts per day"
-            />
-          </div>
-          <Button
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isLoading}
-          >
-            {saveMutation.isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Save Settings
-          </Button>
-        </div>
-
-        <div className="space-y-4 border rounded-lg p-4">
-          <h3 className="text-sm font-medium">Facebook Image Post Test</h3>
-          <div className="space-y-2">
-            <Label htmlFor="image_url">Image URL</Label>
-            <Input
-              id="image_url"
-              value={form.facebook_image_url}
-              onChange={(e) => setForm({ ...form, facebook_image_url: e.target.value })}
-              placeholder="https://example.com/photo.jpg"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="image_title">Image Title</Label>
-            <Input
-              id="image_title"
-              value={form.facebook_image_title}
-              onChange={(e) => setForm({ ...form, facebook_image_title: e.target.value })}
-              placeholder="Your image title"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="image_description">Image Description</Label>
-            <Input
-              id="image_description"
-              value={form.facebook_image_description}
-              onChange={(e) => setForm({ ...form, facebook_image_description: e.target.value })}
-              placeholder="Description for your image"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="image_message">Message</Label>
-            <Input
-              id="image_message"
-              value={form.facebook_image_message}
-              onChange={(e) => setForm({ ...form, facebook_image_message: e.target.value })}
-              placeholder="Caption for your post"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="image_file">Upload Local Image</Label>
-            <Input
-              id="image_file"
-              type="file"
-              accept="image/*"
-              onChange={(e) => setFacebookFile(e.target.files?.[0] ?? null)}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <Button variant="outline" size="sm" onClick={testFacebookImagePost} disabled={testingAI.facebook}>
-              {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              Test Facebook Image Post
-            </Button>
-            <Button variant="secondary" size="sm" onClick={testFacebookImageUpload} disabled={testingAI.facebook || !facebookFile}>
-              {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              Upload Local Image Test
-            </Button>
-            <Button variant="ghost" size="sm" onClick={loadFacebookEnv}>
-              Load from Env
-            </Button>
-          </div>
-          {(envPreview.facebook_app_id || envPreview.facebook_page_id || envPreview.facebook_page_access_token) && (
-            <div className="mt-3 p-3 border rounded bg-slate-50 text-sm">
-              <div className="font-medium">Env values loaded</div>
-              <div className="mt-1">App ID: {envPreview.facebook_app_id}</div>
-              <div>Page ID: {envPreview.facebook_page_id}</div>
-              <div>Page Access Token: {envPreview.facebook_page_access_token}</div>
-            </div>
-          )}
         </div>
       </div>
     </Layout>
