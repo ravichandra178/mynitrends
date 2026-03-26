@@ -18,7 +18,7 @@ export default function SettingsPage() {
   const { data: settings, isLoading } = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
   const [form, setForm] = useState({
     facebook_app_id: "",
-    facebook_page_id: "",
+    facebook_page_id: "1070907976094986", // default value set here
     facebook_page_access_token: "",
     facebook_image_url: "",
     facebook_image_title: "",
