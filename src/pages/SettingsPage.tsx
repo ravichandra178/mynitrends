@@ -47,6 +47,11 @@ export default function SettingsPage() {
     facebook: null as any,
     generatePost: null as any,
   });
+  const [envPreview, setEnvPreview] = useState({
+    facebook_app_id: "",
+    facebook_page_id: "",
+    facebook_page_access_token: "",
+  });
 
   useEffect(() => {
     if (settings) {
@@ -288,6 +293,24 @@ export default function SettingsPage() {
     } finally {
       setTestingAI(prev => ({ ...prev, facebook: false }));
     }
+  };
+
+  const loadFacebookEnv = () => {
+    const envMeta = (import.meta as any).env || {};
+    const appId = envMeta.VITE_FACEBOOK_APP_ID || "";
+    const pageId = envMeta.VITE_FACEBOOK_PAGE_ID || "";
+    const pageToken = envMeta.VITE_FACEBOOK_PAGE_ACCESS_TOKEN || "";
+    setForm((prev) => ({
+      ...prev,
+      facebook_app_id: appId || prev.facebook_app_id,
+      facebook_page_id: pageId || prev.facebook_page_id,
+      facebook_page_access_token: pageToken || prev.facebook_page_access_token,
+    }));
+    setEnvPreview({
+      facebook_app_id: appId || "not set",
+      facebook_page_id: pageId || "not set",
+      facebook_page_access_token: pageToken ? "***" : "not set",
+    });
   };
 
   if (isLoading) return <Layout><div className="flex items-center justify-center h-64 text-muted-foreground">Loading...</div></Layout>;
@@ -606,10 +629,23 @@ export default function SettingsPage() {
               placeholder="Caption for your post"
             />
           </div>
-          <Button variant="outline" size="sm" onClick={testFacebookImagePost} disabled={testingAI.facebook}>
-            {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-            Test Facebook Image Post
-          </Button>
+          <div className="flex items-center justify-between gap-2">
+            <Button variant="outline" size="sm" onClick={testFacebookImagePost} disabled={testingAI.facebook}>
+              {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Test Facebook Image Post
+            </Button>
+            <Button variant="ghost" size="sm" onClick={loadFacebookEnv}>
+              Load from Env
+            </Button>
+          </div>
+          {(envPreview.facebook_app_id || envPreview.facebook_page_id || envPreview.facebook_page_access_token) && (
+            <div className="mt-3 p-3 border rounded bg-slate-50 text-sm">
+              <div className="font-medium">Env values loaded</div>
+              <div className="mt-1">App ID: {envPreview.facebook_app_id}</div>
+              <div>Page ID: {envPreview.facebook_page_id}</div>
+              <div>Page Access Token: {envPreview.facebook_page_access_token}</div>
+            </div>
+          )}
         </div>
       </div>
     </Layout>
