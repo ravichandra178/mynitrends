@@ -397,14 +397,85 @@ async function postToFacebookJob(postId: string): Promise<{ success: boolean; fa
 
 async function handlePostToFacebook(req: Request): Promise<Response> {
   try {
-    const { postId } = await req.json();
+    const { postId, pageId: requestedPageId, accessToken: requestedAccessToken } = await req.json();
     if (!postId) {
       return new Response(JSON.stringify({ error: "Missing postId" }), { status: 400, headers: corsHeaders });
     }
 
-    const result = await postToFacebookJob(postId);
+    const facebookPageId = requestedPageId || Deno.env.get("FACEBOOK_PAGE_ID")!;
+    const facebookAccessToken = requestedAccessToken || Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN")!;
 
-    return new Response(JSON.stringify(result), {
+    if (!facebookPageId || !facebookAccessToken) {
+      return new Response(JSON.stringify({ error: "Missing Facebook page ID or access token" }), { status: 400, headers: corsHeaders });
+    }
+
+    const client = await getConnection();
+    const postResult = await client.queryObject<any>("SELECT * FROM posts WHERE id = $1", [postId]);
+    const post = postResult.rows?.[0];
+
+    if (!post) {
+      return new Response(JSON.stringify({ error: "Post not found" }), { status: 404, headers: corsHeaders });
+    }
+    if (post.posted) {
+      return new Response(JSON.stringify({ error: "Post already published" }), { status: 400, headers: corsHeaders });
+    }
+
+    let fbPostId: string;
+
+    if (post.image_url) {
+      let imageBlob: Blob;
+
+      if (post.image_url.startsWith("data:")) {
+        const parts = post.image_url.split(",");
+        const bstr = atob(parts[1]);
+        const n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        for (let i = 0; i < n; i++) {
+          u8arr[i] = bstr.charCodeAt(i);
+        }
+        imageBlob = new Blob([u8arr], { type: "image/png" });
+      } else {
+        const imgRes = await fetch(post.image_url);
+        if (!imgRes.ok) {
+          throw new Error(`Could not download image URL: ${imgRes.status}`);
+        }
+        imageBlob = await imgRes.blob();
+      }
+
+      const formData = new FormData();
+      formData.append("source", imageBlob, "image.png");
+      formData.append("caption", post.content);
+      formData.append("access_token", facebookAccessToken);
+
+      const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/photos`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const fbData = await fbRes.json();
+      if (fbData.error) {
+        throw new Error(fbData.error.message || JSON.stringify(fbData.error));
+      }
+
+      fbPostId = fbData.post_id || fbData.id;
+    } else {
+      const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/feed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: post.content, access_token: facebookAccessToken }),
+      });
+
+      const fbData = await fbRes.json();
+      if (fbData.error) {
+        throw new Error(fbData.error.message || JSON.stringify(fbData.error));
+      }
+
+      fbPostId = fbData.id;
+    }
+
+    await client.queryObject("UPDATE posts SET posted = true, facebook_post_id = $1 WHERE id = $2", [fbPostId, postId]);
+
+    return new Response(JSON.stringify({ success: true, facebookPostId: fbPostId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

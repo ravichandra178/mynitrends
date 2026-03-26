@@ -18,6 +18,10 @@ export default function PostsPage() {
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [facebookEnv, setFacebookEnv] = useState({
+    pageId: "",
+    accessToken: "",
+  });
 
   const { data: posts = [], isLoading } = useQuery({ queryKey: ["posts"], queryFn: fetchPosts });
 
@@ -27,10 +31,23 @@ export default function PostsPage() {
     onError: () => toast.error("Failed to delete"),
   });
 
-  const handlePostNow = async (postId: string) => {
+  const loadFacebookEnv = () => {
+    const env = (import.meta as any).env || {};
+    setFacebookEnv({
+      pageId: env.VITE_FACEBOOK_PAGE_ID || "",
+      accessToken: env.VITE_FACEBOOK_PAGE_ACCESS_TOKEN || "",
+    });
+  };
+
+  const handlePostNow = async (postId: string, post: any) => {
     setPostingId(postId);
     try {
-      await postToFacebook(postId);
+      if (facebookEnv.pageId && facebookEnv.accessToken && post.image_url) {
+        // if env credentials are loaded, use the direct test post endpoint logic through postToFacebook
+        await postToFacebook(postId, facebookEnv.pageId, facebookEnv.accessToken);
+      } else {
+        await postToFacebook(postId);
+      }
       toast.success("Published to Facebook!");
       queryClient.invalidateQueries({ queryKey: ["posts"] });
     } catch (e: any) {
@@ -76,6 +93,10 @@ export default function PostsPage() {
   return (
     <Layout>
       <PageHeader title="Posts" description="Manage generated posts and publish to Facebook" />
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="text-sm text-muted-foreground">FB env pageId: {facebookEnv.pageId || "not set"}, token: {facebookEnv.accessToken ? "***" : "not set"}</div>
+        <Button size="sm" variant="ghost" onClick={loadFacebookEnv}>Load Facebook Env</Button>
+      </div>
       <div className="border rounded-lg overflow-hidden">
         <Table>
           <TableHeader>
@@ -157,7 +178,7 @@ export default function PostsPage() {
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       {!p.posted && (
-                        <Button size="sm" variant="outline" disabled={postingId === p.id} onClick={() => handlePostNow(p.id)}>
+                        <Button size="sm" variant="outline" disabled={postingId === p.id} onClick={() => handlePostNow(p.id, p)}>
                           {postingId === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                         </Button>
                       )}

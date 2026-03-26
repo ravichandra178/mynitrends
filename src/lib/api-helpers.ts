@@ -253,13 +253,17 @@ export async function generateTrends() {
   }
 }
 
-export async function postToFacebook(postId: string) {
-  console.log("[API] Posting to Facebook:", postId);
+export async function postToFacebook(postId: string, pageId?: string, accessToken?: string) {
+  console.log("[API] Posting to Facebook:", postId, { pageId, accessToken: !!accessToken });
   try {
+    const body: any = { postId };
+    if (pageId) body.pageId = pageId;
+    if (accessToken) body.accessToken = accessToken;
+
     const response = await fetch(`${API_BASE}/api/post-to-facebook`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ postId }),
+      body: JSON.stringify(body),
     });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${await response.text()}`);
