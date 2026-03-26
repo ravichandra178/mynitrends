@@ -52,6 +52,7 @@ export default function SettingsPage() {
     facebook_page_id: "",
     facebook_page_access_token: "",
   });
+  const [facebookFile, setFacebookFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (settings) {
@@ -290,6 +291,36 @@ export default function SettingsPage() {
     } catch (e: any) {
       setTestResults(prev => ({ ...prev, facebook: { success: false, error: e.message } }));
       toast.error(`Facebook image post failed: ${e.message}`);
+    } finally {
+      setTestingAI(prev => ({ ...prev, facebook: false }));
+    }
+  };
+
+  const testFacebookImageUpload = async () => {
+    setTestingAI(prev => ({ ...prev, facebook: true }));
+    try {
+      const pageId = form.facebook_page_id || form.facebook_app_id;
+      const accessToken = form.facebook_page_access_token;
+      if (!pageId || !accessToken) throw new Error("Missing Page ID or Access Token");
+      if (!facebookFile) throw new Error("No image file selected");
+
+      const formData = new FormData();
+      formData.append("source", facebookFile);
+      formData.append("caption", form.facebook_image_message || "Facebook image upload test");
+      formData.append("access_token", accessToken);
+
+      const fbRes = await fetch(`https://graph.facebook.com/${pageId}/photos`, {
+        method: "POST",
+        body: formData,
+      });
+      const result = await fbRes.json();
+
+      if (result.error) throw new Error(result.error.message || JSON.stringify(result.error));
+      setTestResults(prev => ({ ...prev, facebook: { success: true, facebookPostId: result.post_id || result.id } }));
+      toast.success(`Facebook upload successful: ${result.post_id || result.id}`);
+    } catch (e: any) {
+      setTestResults(prev => ({ ...prev, facebook: { success: false, error: e.message } }));
+      toast.error(`Facebook upload failed: ${e.message}`);
     } finally {
       setTestingAI(prev => ({ ...prev, facebook: false }));
     }
@@ -629,10 +660,23 @@ export default function SettingsPage() {
               placeholder="Caption for your post"
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="image_file">Upload Local Image</Label>
+            <Input
+              id="image_file"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setFacebookFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
           <div className="flex items-center justify-between gap-2">
             <Button variant="outline" size="sm" onClick={testFacebookImagePost} disabled={testingAI.facebook}>
               {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
               Test Facebook Image Post
+            </Button>
+            <Button variant="secondary" size="sm" onClick={testFacebookImageUpload} disabled={testingAI.facebook || !facebookFile}>
+              {testingAI.facebook ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Upload Local Image Test
             </Button>
             <Button variant="ghost" size="sm" onClick={loadFacebookEnv}>
               Load from Env

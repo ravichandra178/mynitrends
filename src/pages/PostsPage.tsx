@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchPosts, deletePost, updatePostContent, updatePostSchedule, postToFacebook } from "@/lib/api-helpers";
+import { fetchPosts, deletePost, updatePostContent, updatePostSchedule, postToFacebook, updatePostImage } from "@/lib/api-helpers";
 import { toast } from "sonner";
 import { Send, Trash2, RefreshCw, Loader2, ThumbsUp, MessageSquare } from "lucide-react";
 import { format } from "date-fns";
@@ -24,6 +24,7 @@ export default function PostsPage() {
     pageId: "",
     accessToken: "",
   });
+  const [postImageFiles, setPostImageFiles] = useState<Record<string, File | null>>({});
 
   const { data: posts = [], isLoading } = useQuery({ queryKey: ["posts"], queryFn: fetchPosts });
 
@@ -120,6 +121,33 @@ export default function PostsPage() {
     }
   };
 
+  const handlePostImageSelection = (postId: string, file: File | null) => {
+    setPostImageFiles(prev => ({ ...prev, [postId]: file }));
+  };
+
+  const uploadPostImage = async (postId: string) => {
+    const file = postImageFiles[postId];
+    if (!file) {
+      toast.error("Select a file first");
+      return;
+    }
+
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+
+    try {
+      await updatePostImage(postId, dataUrl);
+      toast.success("Post image updated");
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+    } catch (e: any) {
+      toast.error(e.message || "Failed to update post image");
+    }
+  };
+
   return (
     <Layout>
       <PageHeader title="Posts" description="Manage generated posts and publish to Facebook" />
@@ -166,6 +194,17 @@ export default function PostsPage() {
                     ) : (
                       <div className="w-16 h-16 rounded bg-muted flex items-center justify-center text-xs text-muted-foreground">No image</div>
                     )}
+                    <div className="mt-1 space-y-1 text-xs">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="w-full text-xs"
+                        onChange={(e) => handlePostImageSelection(p.id, e.target.files?.[0] ?? null)}
+                      />
+                      <Button size="xs" onClick={() => uploadPostImage(p.id)} disabled={!postImageFiles[p.id]}>
+                        Apply Image
+                      </Button>
+                    </div>
                   </TableCell>
                   <TableCell className="max-w-xs">
                     {editingId === p.id ? (

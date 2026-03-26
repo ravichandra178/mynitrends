@@ -138,6 +138,26 @@ export async function updatePostSchedule(id: string, scheduledTime: string | nul
   }
 }
 
+export async function updatePostImage(id: string, imageUrl: string) {
+  console.log("[API] Updating post image:", id);
+  try {
+    const response = await fetch(`${API_BASE}/api/posts/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image_url: imageUrl }),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    }
+    const data = await response.json();
+    console.log("[API] ✅ Post image updated:", data);
+    return data;
+  } catch (e) {
+    console.error("[API] ❌ Failed to update post image:", e);
+    throw new Error("Failed to update post image");
+  }
+}
+
 // ====================================
 // SETTINGS API
 // ====================================

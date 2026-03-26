@@ -134,32 +134,39 @@ async function handlePostDelete(req: Request, postId: string): Promise<Response>
 async function handlePostUpdate(req: Request, postId: string): Promise<Response> {
   try {
     const body = await req.json();
-    const { content, scheduled_time } = body;
-    
+    const { content, scheduled_time, image_url } = body;
+
     const client = await getConnection();
     let query = "UPDATE posts SET ";
     const values: any[] = [];
     let paramCount = 1;
-    
+
     if (content !== undefined) {
       query += `content = $${paramCount}`;
       values.push(content);
       paramCount++;
     }
-    
+
     if (scheduled_time !== undefined) {
       if (content !== undefined) query += ", ";
       query += `scheduled_time = $${paramCount}`;
       values.push(scheduled_time);
       paramCount++;
     }
-    
+
+    if (image_url !== undefined) {
+      if (content !== undefined || scheduled_time !== undefined) query += ", ";
+      query += `image_url = $${paramCount}`;
+      values.push(image_url);
+      paramCount++;
+    }
+
     query += ` WHERE id = $${paramCount} RETURNING *`;
     values.push(postId);
-    
+
     const result = await client.queryObject(query, values);
     await client.end();
-    
+
     return new Response(JSON.stringify(result.rows[0]), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -669,7 +676,7 @@ async function handleTestGROQ(req: Request): Promise<Response> {
   try {
     const { model } = await req.json();
     const groqApiKey = Deno.env.get("GROQ_API_KEY");
-    const groqModel = model || Deno.env.get("GROQ_MODEL") || Deno.env.get("GROK_MODEL") || "llama-3.1-8b-instant";
+    const groqModel = model || Deno.env.get("GROQ_MODEL") || Deno.env.get("GOROK_MODEL") || "llama-3.1-8b-instant";
 
     if (!groqApiKey) {
       return new Response(JSON.stringify({ 
