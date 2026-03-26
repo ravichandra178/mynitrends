@@ -12,6 +12,8 @@ import { toast } from "sonner";
 import { Send, Trash2, RefreshCw, Loader2, ThumbsUp, MessageSquare } from "lucide-react";
 import { format } from "date-fns";
 
+const API_BASE = "";
+
 export default function PostsPage() {
   const queryClient = useQueryClient();
   const [postingId, setPostingId] = useState<string | null>(null);
@@ -42,13 +44,41 @@ export default function PostsPage() {
   const handlePostNow = async (postId: string, post: any) => {
     setPostingId(postId);
     try {
-      if (facebookEnv.pageId && facebookEnv.accessToken && post.image_url) {
-        // if env credentials are loaded, use the direct test post endpoint logic through postToFacebook
-        await postToFacebook(postId, facebookEnv.pageId, facebookEnv.accessToken);
+      const env = (import.meta as any).env || {};
+      const pageId = env.VITE_FACEBOOK_PAGE_ID || "";
+      const accessToken = env.VITE_FACEBOOK_PAGE_ACCESS_TOKEN || "";
+
+      if (post.image_url && pageId && accessToken) {
+        // Try image post like settings UI
+        try {
+          const response = await fetch(`${API_BASE}/api/test-facebook-post`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              pageId,
+              accessToken,
+              imageUrl: post.image_url,
+              title: post.title || "",
+              description: post.description || "",
+              message: post.content || "",
+            }),
+          });
+          const result = await response.json();
+          if (!result.success) throw new Error(result.error || "Image post failed");
+
+          // onboard fallback: mark as posted in backend DB
+          await postToFacebook(postId, pageId, accessToken);
+          toast.success("Published to Facebook with image!");
+        } catch (imageErr) {
+          console.warn("Image post failed, falling back to text post:", imageErr);
+          await postToFacebook(postId, pageId, accessToken);
+          toast.success("Published to Facebook as text fallback");
+        }
       } else {
-        await postToFacebook(postId);
+        await postToFacebook(postId, pageId || undefined, accessToken || undefined);
+        toast.success("Published to Facebook");
       }
-      toast.success("Published to Facebook!");
+
       queryClient.invalidateQueries({ queryKey: ["posts"] });
     } catch (e: any) {
       toast.error(e.message || "Failed to publish");

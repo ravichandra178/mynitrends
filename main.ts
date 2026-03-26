@@ -337,41 +337,54 @@ async function postToFacebookJob(postId: string): Promise<{ success: boolean; fa
     let fbPostId: string;
 
     if (post.image_url) {
-      let imageBlob: Blob;
+      try {
+        let imageBlob: Blob;
 
-      if (post.image_url.startsWith("data:")) {
-        const parts = post.image_url.split(",");
-        const bstr = atob(parts[1]);
-        const n = bstr.length;
-        const u8arr = new Uint8Array(n);
-        for (let i = 0; i < n; i++) {
-          u8arr[i] = bstr.charCodeAt(i);
+        if (post.image_url.startsWith("data:")) {
+          const parts = post.image_url.split(",");
+          const bstr = atob(parts[1]);
+          const n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          for (let i = 0; i < n; i++) {
+            u8arr[i] = bstr.charCodeAt(i);
+          }
+          imageBlob = new Blob([u8arr], { type: "image/png" });
+        } else {
+          const imgRes = await fetch(post.image_url);
+          imageBlob = await imgRes.blob();
         }
-        imageBlob = new Blob([u8arr], { type: "image/png" });
-      } else {
-        const imgRes = await fetch(post.image_url);
-        if (!imgRes.ok) {
-          throw new Error(`Could not download image URL: ${imgRes.status}`);
+
+        const formData = new FormData();
+        formData.append("source", imageBlob, "image.png");
+        formData.append("caption", post.content);
+        formData.append("access_token", facebookAccessToken);
+
+        const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/photos`, {
+          method: "POST",
+          body: formData,
+        });
+
+        const fbData = await fbRes.json();
+        if (fbData.error) {
+          throw new Error(fbData.error.message || JSON.stringify(fbData.error));
         }
-        imageBlob = await imgRes.blob();
+
+        fbPostId = fbData.post_id || fbData.id;
+      } catch (imageErr) {
+        console.warn("Image upload failed, trying text fallback: ", imageErr);
+        const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/feed`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: post.content, access_token: facebookAccessToken }),
+        });
+
+        const fbData = await fbRes.json();
+        if (fbData.error) {
+          throw new Error(fbData.error.message || JSON.stringify(fbData.error));
+        }
+
+        fbPostId = fbData.id;
       }
-
-      const formData = new FormData();
-      formData.append("source", imageBlob, "image.png");
-      formData.append("caption", post.content);
-      formData.append("access_token", facebookAccessToken);
-
-      const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/photos`, {
-        method: "POST",
-        body: formData,
-      });
-
-      const fbData = await fbRes.json();
-      if (fbData.error) {
-        throw new Error(fbData.error.message || JSON.stringify(fbData.error));
-      }
-
-      fbPostId = fbData.post_id || fbData.id;
     } else {
       const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/feed`, {
         method: "POST",
@@ -423,41 +436,54 @@ async function handlePostToFacebook(req: Request): Promise<Response> {
     let fbPostId: string;
 
     if (post.image_url) {
-      let imageBlob: Blob;
+      try {
+        let imageBlob: Blob;
 
-      if (post.image_url.startsWith("data:")) {
-        const parts = post.image_url.split(",");
-        const bstr = atob(parts[1]);
-        const n = bstr.length;
-        const u8arr = new Uint8Array(n);
-        for (let i = 0; i < n; i++) {
-          u8arr[i] = bstr.charCodeAt(i);
+        if (post.image_url.startsWith("data:")) {
+          const parts = post.image_url.split(",");
+          const bstr = atob(parts[1]);
+          const n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          for (let i = 0; i < n; i++) {
+            u8arr[i] = bstr.charCodeAt(i);
+          }
+          imageBlob = new Blob([u8arr], { type: "image/png" });
+        } else {
+          const imgRes = await fetch(post.image_url);
+          imageBlob = await imgRes.blob();
         }
-        imageBlob = new Blob([u8arr], { type: "image/png" });
-      } else {
-        const imgRes = await fetch(post.image_url);
-        if (!imgRes.ok) {
-          throw new Error(`Could not download image URL: ${imgRes.status}`);
+
+        const formData = new FormData();
+        formData.append("source", imageBlob, "image.png");
+        formData.append("caption", post.content);
+        formData.append("access_token", facebookAccessToken);
+
+        const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/photos`, {
+          method: "POST",
+          body: formData,
+        });
+
+        const fbData = await fbRes.json();
+        if (fbData.error) {
+          throw new Error(fbData.error.message || JSON.stringify(fbData.error));
         }
-        imageBlob = await imgRes.blob();
+
+        fbPostId = fbData.post_id || fbData.id;
+      } catch (imageErr) {
+        console.warn("Image upload failed, trying text fallback: ", imageErr);
+        const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/feed`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: post.content, access_token: facebookAccessToken }),
+        });
+
+        const fbData = await fbRes.json();
+        if (fbData.error) {
+          throw new Error(fbData.error.message || JSON.stringify(fbData.error));
+        }
+
+        fbPostId = fbData.id;
       }
-
-      const formData = new FormData();
-      formData.append("source", imageBlob, "image.png");
-      formData.append("caption", post.content);
-      formData.append("access_token", facebookAccessToken);
-
-      const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/photos`, {
-        method: "POST",
-        body: formData,
-      });
-
-      const fbData = await fbRes.json();
-      if (fbData.error) {
-        throw new Error(fbData.error.message || JSON.stringify(fbData.error));
-      }
-
-      fbPostId = fbData.post_id || fbData.id;
     } else {
       const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/feed`, {
         method: "POST",
