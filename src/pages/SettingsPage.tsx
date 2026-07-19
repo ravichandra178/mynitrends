@@ -18,7 +18,7 @@ export default function SettingsPage() {
   const { data: settings, isLoading } = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
   const [form, setForm] = useState({
     facebook_app_id: "",
-    facebook_page_id: "1070907976094986", // default value set here
+    facebook_page_id: "",
     facebook_page_access_token: "",
     facebook_image_url: "",
     facebook_image_title: "",
@@ -28,6 +28,7 @@ export default function SettingsPage() {
     max_posts_per_day: 3,
     groq_model: "llama-3.1-8b-instant",
     hf_model: "Qwen/Qwen2.5-7B-Instruct",
+    hf_image_model: "black-forest-labs/FLUX.1-dev",
   });
   const [testingAI, setTestingAI] = useState({
     groq: false,
@@ -68,6 +69,7 @@ export default function SettingsPage() {
         max_posts_per_day: settings.max_posts_per_day ?? 3,
         groq_model: settings.groq_model || "llama-3.1-8b-instant",
         hf_model: settings.hf_model || "Qwen/Qwen2.5-7B-Instruct",
+        hf_image_model: settings.hf_image_model || "black-forest-labs/FLUX.1-dev",
       });
     }
   }, [settings]);
@@ -203,7 +205,7 @@ export default function SettingsPage() {
       const response = await fetch(`${API_BASE}/api/test-hf-image`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ model: form.hf_image_model }),
       });
       const result = await response.json();
       setTestResults(prev => ({ ...prev, hfImage: result }));
@@ -444,6 +446,16 @@ export default function SettingsPage() {
                   placeholder="Qwen/Qwen2.5-7B-Instruct"
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="hf_image_model">HF Image Generation Model</Label>
+                <Input
+                  id="hf_image_model"
+                  value={form.hf_image_model}
+                  onChange={(e) => setForm({ ...form, hf_image_model: e.target.value })}
+                  placeholder="black-forest-labs/FLUX.1-dev"
+                />
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -518,7 +530,7 @@ export default function SettingsPage() {
                   <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">🖼️</div>
                   <div>
                     <div className="font-medium">HF Image Generation</div>
-                    <div className="text-xs text-muted-foreground">HF_MODEL env var</div>
+                    <div className="text-xs text-muted-foreground">{form.hf_image_model}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
