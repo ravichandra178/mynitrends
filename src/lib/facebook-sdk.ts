@@ -15,7 +15,7 @@ async function fetchAppId(): Promise<string> {
 }
 
 export async function initFacebookSDK(): Promise<void> {
-  const appId = await fetchAppId();
+  const appId = "1208364057636571"; // await fetchAppId();
   if (!appId) {
     console.error("[FB SDK] ❌ No FACEBOOK_APP_ID configured");
     throw new Error("FACEBOOK_APP_ID not configured in environment variables");
