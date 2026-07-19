@@ -634,7 +634,6 @@ async function handleAiReply(req: Request): Promise<Response> {
       });
     }
 
-    // FIX 1: Use POST_LIMIT env var to control how many posts to scan
     const postLimit = Number.parseInt(Deno.env.get("POST_LIMIT") || "", 10);
     const replyThreadLimit = Number.parseInt(Deno.env.get("REPLY_THREAD_LIMIT") || "", 10);
     const resolvedPostLimit = Number.isFinite(postLimit) && postLimit > 0 ? postLimit : 1;
@@ -663,10 +662,13 @@ async function handleAiReply(req: Request): Promise<Response> {
 
     let targetPostId = "";
     let eligibleComment: any = null;
-    const alreadyRepliedCommentIds = new Set<string>();
 
     // Scan through fetched posts to look for a matching comment interaction
     for (const post of posts) {
+      // FIX 1: Move these tracking structures INSIDE the loop so data doesn't leak between posts
+      const alreadyRepliedCommentIds = new Set<string>();
+      const ownReplyIds = new Set<string>();
+
       const commentsUrl = `https://graph.facebook.com/v20.0/${post.id}/comments?fields=id,message,from,created_time,replies.limit(${resolvedReplyThreadLimit}){id,message,from,created_time}&limit=100&order=reverse_chronological&access_token=${encodeURIComponent(accessToken)}`;
       const commentsRes = await fetch(commentsUrl);
       const commentsData = await commentsRes.json();
@@ -675,14 +677,18 @@ async function handleAiReply(req: Request): Promise<Response> {
 
       const currentPostComments: any[] = [];
       for (const comment of commentsData.data) {
-        // Tag parent ID to trace layout trees easily
         comment.parent_comment_id = null; 
         currentPostComments.push(comment);
 
         if (comment?.replies?.data && Array.isArray(comment.replies.data)) {
           for (const reply of comment.replies.data) {
-            reply.parent_comment_id = comment.id; // Record the anchor point for nested paths
+            reply.parent_comment_id = comment.id; 
             currentPostComments.push(reply);
+
+            // Track individual reply IDs made by the page to prevent responding to yourself
+            if (reply?.from?.id === pageId) {
+              ownReplyIds.add(reply.id);
+            }
           }
 
           const hasOwnReply = comment.replies.data.some((reply: any) => reply?.from?.id === pageId);
@@ -697,14 +703,22 @@ async function handleAiReply(req: Request): Promise<Response> {
 
       const match = currentPostComments.find((c: any) => {
         const isOwnComment = c?.from?.id === pageId;
-        const hasBeenAnswered = alreadyRepliedCommentIds.has(c.id) || (c.parent_comment_id && alreadyRepliedCommentIds.has(c.parent_comment_id));
+        
+        let hasBeenAnswered = false;
+        if (c.parent_comment_id) {
+          // If it's a nested reply, check if parent thread is done OR if this specific reply is yours
+          hasBeenAnswered = alreadyRepliedCommentIds.has(c.parent_comment_id) || ownReplyIds.has(c.id);
+        } else {
+          hasBeenAnswered = alreadyRepliedCommentIds.has(c.id);
+        }
+
         return !isOwnComment && !hasBeenAnswered && typeof c?.message === "string" && c.message.trim().length > 0;
       });
 
       if (match) {
         eligibleComment = match;
         targetPostId = post.id;
-        break; // Match found, break out of the post loop
+        break; 
       }
     }
 
@@ -737,9 +751,8 @@ async function handleAiReply(req: Request): Promise<Response> {
     const likeRes = await fetch(likeUrl, { method: "POST" });
     await likeRes.json();
 
-    // FIX 2: Target the absolute parent anchor comment ID if this is a nested comment to ensure it nests properly
-    const replyTargetId = eligibleComment.parent_comment_id || eligibleComment.id;
-    const replyUrl = `https://graph.facebook.com/v20.0/${replyTargetId}/comments?access_token=${encodeURIComponent(accessToken)}`;
+    // FIX 2 & 3: Target the exact user comment ID to ensure it replies inline to their action
+    const replyUrl = `https://graph.facebook.com/v20.0/${eligibleComment.id}/comments?access_token=${encodeURIComponent(accessToken)}`;
     
     const replyRes = await fetch(replyUrl, {
       method: "POST",
@@ -772,6 +785,7 @@ async function handleAiReply(req: Request): Promise<Response> {
     });
   }
 }
+
 async function handleTestConnection(req: Request): Promise<Response> {
   try {
     const body = await req.json();
