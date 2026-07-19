@@ -634,8 +634,13 @@ async function handleAiReply(req: Request): Promise<Response> {
       });
     }
 
-    // FIX 1: Increase limit to 5 so it scans beyond just the absolute latest post
-    const postsUrl = `https://graph.facebook.com/v20.0/${pageId}/published_posts?fields=id,message,created_time&limit=5&access_token=${encodeURIComponent(accessToken)}`;
+    // FIX 1: Use POST_LIMIT env var to control how many posts to scan
+    const postLimit = Number.parseInt(Deno.env.get("POST_LIMIT") || "", 10);
+    const replyThreadLimit = Number.parseInt(Deno.env.get("REPLY_THREAD_LIMIT") || "", 10);
+    const resolvedPostLimit = Number.isFinite(postLimit) && postLimit > 0 ? postLimit : 1;
+    const resolvedReplyThreadLimit = Number.isFinite(replyThreadLimit) && replyThreadLimit > 0 ? replyThreadLimit : 5;
+    
+    const postsUrl = `https://graph.facebook.com/v20.0/${pageId}/published_posts?fields=id,message,created_time&limit=${resolvedPostLimit}&access_token=${encodeURIComponent(accessToken)}`;
     const postsRes = await fetch(postsUrl);
     const postsData = await postsRes.json();
 
@@ -656,18 +661,13 @@ async function handleAiReply(req: Request): Promise<Response> {
       });
     }
 
-    const postLimit = Number.parseInt(Deno.env.get("POST_LIMIT") || "", 10);
-    const replyThreadLimit = Number.parseInt(Deno.env.get("REPLY_THREAD_LIMIT") || "", 10);
-    const resolvedPostLimit = Number.isFinite(postLimit) && postLimit > 0 ? postLimit : 1;
-    const resolvedReplyThreadLimit = Number.isFinite(replyThreadLimit) && replyThreadLimit > 0 ? replyThreadLimit : 5;
-
     let targetPostId = "";
     let eligibleComment: any = null;
     const alreadyRepliedCommentIds = new Set<string>();
 
     // Scan through fetched posts to look for a matching comment interaction
     for (const post of posts) {
-      const commentsUrl = `https://graph.facebook.com/v20.0/${post.id}/comments?fields=id,message,from,created_time,replies.limit(${resolvedReplyThreadLimit}){id,message,from,created_time}&limit=${resolvedPostLimit}&order=reverse_chronological&access_token=${encodeURIComponent(accessToken)}`;
+      const commentsUrl = `https://graph.facebook.com/v20.0/${post.id}/comments?fields=id,message,from,created_time,replies.limit(${resolvedReplyThreadLimit}){id,message,from,created_time}&limit=100&order=reverse_chronological&access_token=${encodeURIComponent(accessToken)}`;
       const commentsRes = await fetch(commentsUrl);
       const commentsData = await commentsRes.json();
 
@@ -675,12 +675,13 @@ async function handleAiReply(req: Request): Promise<Response> {
 
       const currentPostComments: any[] = [];
       for (const comment of commentsData.data) {
-        comment.parent_comment_id = null;
+        // Tag parent ID to trace layout trees easily
+        comment.parent_comment_id = null; 
         currentPostComments.push(comment);
 
         if (comment?.replies?.data && Array.isArray(comment.replies.data)) {
           for (const reply of comment.replies.data) {
-            reply.parent_comment_id = comment.id;
+            reply.parent_comment_id = comment.id; // Record the anchor point for nested paths
             currentPostComments.push(reply);
           }
 
@@ -691,6 +692,7 @@ async function handleAiReply(req: Request): Promise<Response> {
         }
       }
 
+      // Sort by timeline sequence
       currentPostComments.sort((a, b) => new Date(b.created_time).getTime() - new Date(a.created_time).getTime());
 
       const match = currentPostComments.find((c: any) => {
@@ -702,7 +704,7 @@ async function handleAiReply(req: Request): Promise<Response> {
       if (match) {
         eligibleComment = match;
         targetPostId = post.id;
-        break;
+        break; // Match found, break out of the post loop
       }
     }
 
@@ -730,6 +732,7 @@ async function handleAiReply(req: Request): Promise<Response> {
     const replyResult = await generateAutoreply(dbUrl, groqApiKey, commentText, targetPostId);
     const replyText = replyResult?.reply || replyResult?.response || "Thanks for your comment!";
 
+    // Action execution
     const likeUrl = `https://graph.facebook.com/v20.0/${eligibleComment.id}/likes?access_token=${encodeURIComponent(accessToken)}`;
     const likeRes = await fetch(likeUrl, { method: "POST" });
     await likeRes.json();
@@ -737,7 +740,7 @@ async function handleAiReply(req: Request): Promise<Response> {
     // FIX 2: Target the absolute parent anchor comment ID if this is a nested comment to ensure it nests properly
     const replyTargetId = eligibleComment.parent_comment_id || eligibleComment.id;
     const replyUrl = `https://graph.facebook.com/v20.0/${replyTargetId}/comments?access_token=${encodeURIComponent(accessToken)}`;
-
+    
     const replyRes = await fetch(replyUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -769,7 +772,6 @@ async function handleAiReply(req: Request): Promise<Response> {
     });
   }
 }
-
 async function handleTestConnection(req: Request): Promise<Response> {
   try {
     const body = await req.json();
