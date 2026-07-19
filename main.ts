@@ -1,6 +1,7 @@
 /// <reference lib="deno.window" />
 /// <reference lib="deno.ns" />
 import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
+import { InferenceClient } from "https://esm.sh/@huggingface/inference@3.0.0";
 import { generatePost } from "./functions/generate-post.ts";
 import { generateTrends } from "./functions/generate-trends.ts";
 import { generateAutoreply } from "./functions/generate-autoreply.ts";
@@ -1035,8 +1036,9 @@ async function handleTestHuggingFace(req: Request): Promise<Response> {
 
 async function handleTestHFImage(req: Request): Promise<Response> {
   try {
+    const requestBody = await req.json().catch(() => ({})) as { model?: string; prompt?: string; numInferenceSteps?: number };
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
-    const hfModel = (Deno.env.get("HF_MODEL") || "stabilityai/stable-diffusion-xl-base-1.0").trim();
+    const hfModel = (requestBody.model || Deno.env.get("HF_MODEL") || "black-forest-labs/FLUX.1-dev").trim();
 
     if (!hfApiKey) {
       return new Response(JSON.stringify({ 
@@ -1050,11 +1052,24 @@ async function handleTestHFImage(req: Request): Promise<Response> {
     console.log(`[TEST] Testing HF Image Generation with model: ${hfModel}`);
 
     const testTopic = "AI trends transforming social media marketing";
-    const imagePrompt = `Create a social media poster about: ${testTopic}, modern design, vibrant colors, trending topic, 4k, cinematic lighting`;
+    const imagePrompt = requestBody.prompt || `Create a social media poster about: ${testTopic}, modern design, vibrant colors, trending topic, 4k, cinematic lighting`;
+    const numInferenceSteps = requestBody.numInferenceSteps ?? 5;
 
-    const response = await fetch(
-      `https://router.huggingface.co/hf-inference/models/${hfModel}`,
-      {
+    let imageBlob: Blob | null = null;
+    try {
+      const client = new InferenceClient(hfApiKey);
+      imageBlob = await client.textToImage({
+        provider: "fal-ai",
+        model: hfModel,
+        inputs: imagePrompt,
+        parameters: { num_inference_steps: numInferenceSteps },
+      });
+    } catch (error) {
+      console.warn(`[TEST] InferenceClient failed, falling back to router request:`, error);
+    }
+
+    if (!imageBlob) {
+      const response = await fetch(`https://router.huggingface.co/hf-inference/models/${hfModel}`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${hfApiKey}`,
@@ -1062,64 +1077,65 @@ async function handleTestHFImage(req: Request): Promise<Response> {
         },
         body: JSON.stringify({ inputs: imagePrompt }),
         signal: AbortSignal.timeout(30000),
-      }
-    );
+      });
 
-    console.log(`[TEST] HF Image API Response: ${response.status} ${response.statusText}`);
+      console.log(`[TEST] HF Image API Response: ${response.status} ${response.statusText}`);
 
-    if (!response.ok) {
-      let errorMessage = `HTTP ${response.status}`;
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.error || errorMessage;
-        // Check for model loading status
-        if (errorData.estimated_time) {
-          errorMessage = `Model is loading (estimated ${Math.round(errorData.estimated_time)}s). Try again shortly.`;
+      if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+          if (errorData.estimated_time) {
+            errorMessage = `Model is loading (estimated ${Math.round(errorData.estimated_time)}s). Try again shortly.`;
+          }
+        } catch (_) {
+          errorMessage = response.statusText || errorMessage;
         }
-      } catch (_) {
-        errorMessage = response.statusText || errorMessage;
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: errorMessage,
+          model: hfModel,
+          provider: "HF Image Generation"
+        }), { status: 200, headers: corsHeaders });
       }
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: errorMessage,
-        model: hfModel,
-        provider: "HF Image Generation"
-      }), { status: 200, headers: corsHeaders });
+
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("image")) {
+        const text = await response.text();
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: `Unexpected response type: ${contentType}. Body: ${text.substring(0, 200)}`,
+          model: hfModel,
+          provider: "HF Image Generation"
+        }), { status: 200, headers: corsHeaders });
+      }
+
+      imageBlob = await response.blob();
     }
 
-    const contentType = response.headers.get("content-type") || "";
-    if (contentType.includes("image")) {
-      const imageBytes = await response.arrayBuffer();
-      const sizeKB = Math.round(imageBytes.byteLength / 1024);
-      console.log(`[TEST] ✅ HF Image Success: Generated ${sizeKB}KB image (${contentType})`);
-      
-      // Convert to base64 for preview
-      const uint8 = new Uint8Array(imageBytes);
-      let binary = "";
-      for (let i = 0; i < uint8.length; i++) {
-        binary += String.fromCharCode(uint8[i]);
-      }
-      const base64Image = btoa(binary);
-      const imageDataUrl = `data:${contentType};base64,${base64Image}`;
+    const contentType = imageBlob.type || "image/png";
+    const imageBytes = await imageBlob.arrayBuffer();
+    const sizeKB = Math.round(imageBytes.byteLength / 1024);
+    console.log(`[TEST] ✅ HF Image Success: Generated ${sizeKB}KB image (${contentType})`);
 
-      return new Response(JSON.stringify({ 
-        success: true, 
-        message: `Generated ${sizeKB}KB image successfully`,
-        model: hfModel,
-        provider: "HF Image Generation",
-        imageUrl: imageDataUrl,
-        sizeKB: sizeKB,
-        prompt: imagePrompt,
-      }), { headers: corsHeaders });
-    } else {
-      const text = await response.text();
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: `Unexpected response type: ${contentType}. Body: ${text.substring(0, 200)}`,
-        model: hfModel,
-        provider: "HF Image Generation"
-      }), { status: 200, headers: corsHeaders });
+    const uint8 = new Uint8Array(imageBytes);
+    let binary = "";
+    for (let i = 0; i < uint8.length; i++) {
+      binary += String.fromCharCode(uint8[i]);
     }
+    const base64Image = btoa(binary);
+    const imageDataUrl = `data:${contentType};base64,${base64Image}`;
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: `Generated ${sizeKB}KB image successfully`,
+      model: hfModel,
+      provider: "HF Image Generation",
+      imageUrl: imageDataUrl,
+      sizeKB: sizeKB,
+      prompt: imagePrompt,
+    }), { headers: corsHeaders });
   } catch (e) {
     console.error("TEST HF Image error:", e);
     return new Response(JSON.stringify({ 

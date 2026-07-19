@@ -1,4 +1,15 @@
 import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
+import { InferenceClient } from "https://esm.sh/@huggingface/inference@3.0.0";
+
+async function generateImageWithInferenceClient(hfApiKey: string, model: string, prompt: string): Promise<Blob | null> {
+  const client = new InferenceClient(hfApiKey);
+  return await client.textToImage({
+    provider: "fal-ai",
+    model,
+    inputs: prompt,
+    parameters: { num_inference_steps: 5 },
+  });
+}
 
 export async function generatePost(
   dbUrl: string,
@@ -220,84 +231,99 @@ Return ONLY the prompt, nothing else.`
     try {
       console.log(`[IMAGE] Using model: ${primaryModel}`);
       console.log(`[IMAGE] Prompt: "${imagePrompt}"`);
-      
-      const hfImageRes = await fetch(
-        `https://router.huggingface.co/hf-inference/models/${primaryModel}`,
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${hfApiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            inputs: imagePrompt,
-            options: {
-              use_cache: false,
-            },
-          }),
-          signal: AbortSignal.timeout(60000)
-        }
-      );
 
-      if (hfImageRes.ok) {
-        const contentType = hfImageRes.headers.get("content-type");
-        if (contentType && contentType.startsWith("image/")) {
-          const imageBuffer = await hfImageRes.arrayBuffer();
-          const base64Image = arrayBufferToBase64(imageBuffer);
-          imageUrl = `data:${contentType};base64,${base64Image}`;
-          console.log(`[IMAGE] ✅ Success with ${primaryModel} (${imageBuffer.byteLength} bytes)`);
-        } else {
-          console.log(`[IMAGE] ❌ Unexpected content type: ${contentType}`);
-          const body = await hfImageRes.text();
-          console.log(`[IMAGE] Response body: ${body.substring(0, 200)}`);
-        }
+      let imageBlob: Blob | null = null;
+      try {
+        imageBlob = await generateImageWithInferenceClient(hfApiKey, primaryModel, imagePrompt);
+        console.log(`[IMAGE] ✅ InferenceClient success with ${primaryModel}`);
+      } catch (e) {
+        console.error(`[IMAGE] InferenceClient failed for ${primaryModel}:`, e);
+      }
+
+      if (imageBlob) {
+        const contentType = imageBlob.type || "image/png";
+        const imageBuffer = await imageBlob.arrayBuffer();
+        const base64Image = arrayBufferToBase64(imageBuffer);
+        imageUrl = `data:${contentType};base64,${base64Image}`;
+        console.log(`[IMAGE] ✅ Success with ${primaryModel} (${imageBuffer.byteLength} bytes)`);
       } else {
-        let errorMessage = `Image generation error: HTTP ${hfImageRes.status}`;
-        
-        try {
-          const errorData = await hfImageRes.json();
-          errorMessage = errorData.error || JSON.stringify(errorData);
-        } catch (e) {
-          try {
-            errorMessage = await hfImageRes.text();
-          } catch (_) {}
-        }
-        
-        console.log(`[IMAGE] ❌ ${hfImageRes.status} from ${primaryModel}: ${errorMessage}`);
+        const hfImageRes = await fetch(
+          `https://router.huggingface.co/hf-inference/models/${primaryModel}`,
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${hfApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              inputs: imagePrompt,
+              options: {
+                use_cache: false,
+              },
+            }),
+            signal: AbortSignal.timeout(60000)
+          }
+        );
 
-        // Try fallback model if primary fails
-        if (primaryModel !== "stabilityai/stable-diffusion-xl-base-1.0") {
-          console.log(`[IMAGE] 🔄 Trying fallback model: stabilityai/stable-diffusion-xl-base-1.0`);
+        if (hfImageRes.ok) {
+          const contentType = hfImageRes.headers.get("content-type");
+          if (contentType && contentType.startsWith("image/")) {
+            const imageBuffer = await hfImageRes.arrayBuffer();
+            const base64Image = arrayBufferToBase64(imageBuffer);
+            imageUrl = `data:${contentType};base64,${base64Image}`;
+            console.log(`[IMAGE] ✅ Success with ${primaryModel} (${imageBuffer.byteLength} bytes)`);
+          } else {
+            console.log(`[IMAGE] ❌ Unexpected content type: ${contentType}`);
+            const body = await hfImageRes.text();
+            console.log(`[IMAGE] Response body: ${body.substring(0, 200)}`);
+          }
+        } else {
+          let errorMessage = `Image generation error: HTTP ${hfImageRes.status}`;
+          
           try {
-            const fallbackRes = await fetch(
-              `https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0`,
-              {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${hfApiKey}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  inputs: imagePrompt,
-                  options: { use_cache: false },
-                }),
-                signal: AbortSignal.timeout(60000)
-              }
-            );
-
-            if (fallbackRes.ok) {
-              const ct = fallbackRes.headers.get("content-type");
-              if (ct && ct.startsWith("image/")) {
-                const buf = await fallbackRes.arrayBuffer();
-                const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-                imageUrl = `data:${ct};base64,${b64}`;
-                console.log(`[IMAGE] ✅ Fallback success (${buf.byteLength} bytes)`);
-              }
-            } else {
-              console.log(`[IMAGE] ❌ Fallback also failed: ${fallbackRes.status}`);
-            }
+            const errorData = await hfImageRes.json();
+            errorMessage = errorData.error || JSON.stringify(errorData);
           } catch (e) {
-            console.error(`[IMAGE] ❌ Fallback error:`, e);
+            try {
+              errorMessage = await hfImageRes.text();
+            } catch (_) {}
+          }
+          
+          console.log(`[IMAGE] ❌ ${hfImageRes.status} from ${primaryModel}: ${errorMessage}`);
+
+          if (primaryModel !== "stabilityai/stable-diffusion-xl-base-1.0") {
+            console.log(`[IMAGE] 🔄 Trying fallback model: stabilityai/stable-diffusion-xl-base-1.0`);
+            try {
+              const fallbackRes = await fetch(
+                `https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Authorization": `Bearer ${hfApiKey}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    inputs: imagePrompt,
+                    options: { use_cache: false },
+                  }),
+                  signal: AbortSignal.timeout(60000)
+                }
+              );
+
+              if (fallbackRes.ok) {
+                const ct = fallbackRes.headers.get("content-type");
+                if (ct && ct.startsWith("image/")) {
+                  const buf = await fallbackRes.arrayBuffer();
+                  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+                  imageUrl = `data:${ct};base64,${b64}`;
+                  console.log(`[IMAGE] ✅ Fallback success (${buf.byteLength} bytes)`);
+                }
+              } else {
+                console.log(`[IMAGE] ❌ Fallback also failed: ${fallbackRes.status}`);
+              }
+            } catch (e) {
+              console.error(`[IMAGE] ❌ Fallback error:`, e);
+            }
           }
         }
       }
