@@ -1688,7 +1688,7 @@ Deno.serve(async (req) => {
     if (path === "/api/test-generate-post" && method === "POST") return await handleTestGeneratePost(req);
     if (path === "/api/system-status" && method === "GET") return await handleSystemStatus(req);
     if (path === "/api/facebook-app-id" && method === "GET") {
-      let appId = Deno.env.get("FACEBOOK_APP_ID") || "";
+      let appId = Deno.env.get("VITE_FACEBOOK_APP_ID") || "";
       if (!appId) {
         try {
           const settings = await getSettingsFromDb();
