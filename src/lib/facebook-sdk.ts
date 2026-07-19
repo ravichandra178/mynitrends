@@ -23,21 +23,38 @@ export async function initFacebookSDK(): Promise<void> {
 
   return new Promise((resolve, reject) => {
     if (window.FB) {
+      if (!(window.FB as any).__initialized) {
+        window.FB.init({
+          appId,
+          cookie: true,
+          xfbml: true,
+          version: FB_API_VERSION,
+        });
+        (window.FB as any).__initialized = true;
+        window.FB.AppEvents.logPageView();
+        console.log("[FB SDK] ✅ Facebook SDK initialized");
+      }
       resolve();
       return;
     }
 
     window.fbAsyncInit = function () {
       window.FB.init({
-        appId: appId,
+        appId,
         cookie: true,
         xfbml: true,
         version: FB_API_VERSION,
       });
+      (window.FB as any).__initialized = true;
       window.FB.AppEvents.logPageView();
       console.log("[FB SDK] ✅ Facebook SDK initialized");
       resolve();
     };
+
+    const existingScript = document.getElementById("facebook-jssdk");
+    if (existingScript) {
+      return;
+    }
 
     const script = document.createElement("script");
     script.id = "facebook-jssdk";
@@ -60,13 +77,10 @@ export function facebookLogin(): Promise<{
   userID: string;
   pages: any[];
 }> {
-  return new Promise((resolve, reject) => {
-    window.FB.login(
-      (response: any) => {
-        if (response.authResponse) {
-          const { accessToken, userID } = response.authResponse;
-          console.log("[FB SDK] ✅ User logged in, fetching pages...");
-
+  return initFacebookSDK().then(
+    () =>
+      new Promise((resolve, reject) => {
+        const finishWithPages = (accessToken: string, userID: string) => {
           window.FB.api(
             "/me/accounts",
             { fields: "id,name,access_token,category" },
@@ -83,19 +97,47 @@ export function facebookLogin(): Promise<{
               }
             }
           );
-        } else {
-          reject(new Error("Facebook login cancelled"));
-        }
-      },
-      {
-        scope: "pages_manage_posts,pages_read_engagement,pages_show_list",
-      }
-    );
-  });
+        };
+
+        window.FB.getLoginStatus((status: any) => {
+          if (status?.status === "connected" && status.authResponse) {
+            finishWithPages(status.authResponse.accessToken, status.authResponse.userID);
+            return;
+          }
+
+          window.FB.login(
+            (response: any) => {
+              if (response?.authResponse) {
+                finishWithPages(response.authResponse.accessToken, response.authResponse.userID);
+              } else {
+                window.FB.getLoginStatus((retryStatus: any) => {
+                  if (retryStatus?.status === "connected" && retryStatus.authResponse) {
+                    finishWithPages(retryStatus.authResponse.accessToken, retryStatus.authResponse.userID);
+                  } else {
+                    reject(new Error("Facebook login was cancelled or blocked. Please allow the popup and try again."));
+                  }
+                });
+              }
+            },
+            {
+              scope: "pages_manage_posts,pages_read_engagement,pages_show_list",
+              return_scopes: true,
+              auth_type: "rerequest",
+              display: "popup",
+            }
+          );
+        });
+      })
+  );
 }
 
 export function checkLoginStatus(): Promise<any> {
   return new Promise((resolve) => {
+    if (!window.FB) {
+      resolve({ status: "unknown" });
+      return;
+    }
+
     window.FB.getLoginStatus((response: any) => {
       resolve(response);
     });
@@ -104,6 +146,11 @@ export function checkLoginStatus(): Promise<any> {
 
 export function facebookLogout(): Promise<void> {
   return new Promise((resolve) => {
+    if (!window.FB) {
+      resolve();
+      return;
+    }
+
     window.FB.logout(() => {
       console.log("[FB SDK] ✅ User logged out");
       resolve();
