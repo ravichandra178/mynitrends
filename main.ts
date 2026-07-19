@@ -673,6 +673,7 @@ async function handleAiReply(req: Request): Promise<Response> {
       });
     }
 
+    // Gather all candidate comments and sub-replies into one flat list
     const allComments: any[] = [];
     for (const comment of commentsData.data || []) {
       allComments.push(comment);
@@ -681,6 +682,14 @@ async function handleAiReply(req: Request): Promise<Response> {
       }
     }
 
+    // Force a strict global sort by timestamp so the absolute newest action moves to the front
+    allComments.sort((a, b) => {
+      const timeA = new Date(a.created_time).getTime();
+      const timeB = new Date(b.created_time).getTime();
+      return timeB - timeA; // Descending order (Newest first)
+    });
+
+    // Scan the sorted timeline for an eligible interaction
     const eligibleComment = allComments.find((comment: any) => {
       const isOwnComment = comment?.from?.id === pageId;
       return !isOwnComment && typeof comment?.message === "string" && comment.message.trim().length > 0;
