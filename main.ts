@@ -655,7 +655,7 @@ async function handleAiReply(req: Request): Promise<Response> {
       });
     }
 
-    const commentsUrl = `https://graph.facebook.com/v20.0/${latestPost.id}/comments?fields=id,message,from,created_time&limit=5&access_token=${encodeURIComponent(accessToken)}`;
+    const commentsUrl = `https://graph.facebook.com/v20.0/${latestPost.id}/comments?fields=id,message,from,created_time&limit=5&order=reverse_chronological&access_token=${encodeURIComponent(accessToken)}`;
     const commentsRes = await fetch(commentsUrl);
     const commentsData = await commentsRes.json();
 
