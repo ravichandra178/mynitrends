@@ -1,14 +1,24 @@
 import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
-import { InferenceClient } from "https://esm.sh/@huggingface/inference@3.0.0";
 
 async function generateImageWithInferenceClient(hfApiKey: string, model: string, prompt: string): Promise<Blob | null> {
-  const client = new InferenceClient(hfApiKey);
-  return await client.textToImage({
-    provider: "fal-ai",
-    model,
-    inputs: prompt,
-    parameters: { num_inference_steps: 5 },
+  const response = await fetch(`https://router.huggingface.co/hf-inference/models/${model}`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${hfApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      inputs: prompt,
+      parameters: { num_inference_steps: 5 },
+      provider: "fal-ai"
+    }),
   });
+
+  if (!response.ok) {
+    throw new Error(`HF Router Error: ${response.status} - ${await response.text()}`);
+  }
+
+  return await response.blob();
 }
 
 export async function generatePost(
