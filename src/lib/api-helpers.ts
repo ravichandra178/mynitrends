@@ -226,6 +226,40 @@ export async function generatePost(trendId: string, topic: string) {
   }
 }
 
+export async function runAiReplyCheck() {
+  console.log("[API] Triggering AI reply check...");
+  try {
+    const response = await fetch(`${API_BASE}/api/ai-reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    }
+    const data = await response.json();
+    console.log("[API] ✅ AI reply check completed:", data);
+    return data;
+  } catch (e) {
+    console.error("[API] ❌ AI reply check failed:", e);
+    throw new Error("Failed to run AI reply check");
+  }
+}
+
+export async function fetchAiReplyLogs() {
+  console.log("[API] Fetching AI reply logs...");
+  try {
+    const response = await fetch(`${API_BASE}/api/ai-reply`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    }
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+  } catch (e) {
+    console.error("[API] ❌ Failed to fetch AI reply logs:", e);
+    return [];
+  }
+}
+
 export async function generateTrends() {
   console.log("%c[TRENDS LOG] 🔵 Generating trends from /api/generate-trends...", "color: blue; font-weight: bold;");
   try {

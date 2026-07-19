@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { PageHeader } from "@/components/PageHeader";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchTrends, addTrend, generateTrends, generatePost } from "@/lib/api-helpers";
+import { fetchTrends, addTrend, generateTrends, generatePost, runAiReplyCheck, fetchAiReplyLogs } from "@/lib/api-helpers";
 import { toast } from "sonner";
 import { Plus, Sparkles, Loader2, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
@@ -17,6 +17,8 @@ export default function TrendsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [fetchingTrends, setFetchingTrends] = useState(false);
+  const [aiReplyChecking, setAiReplyChecking] = useState(false);
+  const [aiReplyLogs, setAiReplyLogs] = useState<any[]>([]);
   const queryClient = useQueryClient();
 
   const { data: trends = [], isLoading, error } = useQuery({ queryKey: ["trends"], queryFn: fetchTrends });
@@ -47,6 +49,33 @@ export default function TrendsPage() {
       toast.error(e.message || "Failed to generate post");
     } finally {
       setGeneratingId(null);
+    }
+  };
+
+  const loadAiReplyLogs = async () => {
+    try {
+      const logs = await fetchAiReplyLogs();
+      setAiReplyLogs(logs);
+    } catch (e) {
+      console.error("[TrendsPage] Failed to load AI reply logs:", e);
+    }
+  };
+
+  useEffect(() => {
+    void loadAiReplyLogs();
+  }, []);
+
+  const handleAiReplyCheck = async () => {
+    setAiReplyChecking(true);
+    try {
+      const data = await runAiReplyCheck();
+      setAiReplyLogs(Array.isArray(data?.logs) ? data.logs : []);
+      toast.success(data?.message || "AI reply check completed");
+    } catch (e: any) {
+      console.error("[TrendsPage] AI reply check failed:", e);
+      toast.error(e.message || "Failed to run AI reply check");
+    } finally {
+      setAiReplyChecking(false);
     }
   };
 
@@ -99,6 +128,10 @@ export default function TrendsPage() {
               {fetchingTrends ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <TrendingUp className="h-4 w-4 mr-1" />}
               Generate Trends
             </Button>
+            <Button size="sm" variant="outline" onClick={handleAiReplyCheck} disabled={aiReplyChecking}>
+              {aiReplyChecking ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
+              Trigger AI Reply Check
+            </Button>
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
                 <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Trend</Button>
@@ -118,7 +151,29 @@ export default function TrendsPage() {
         }
       />
 
-      <div className="border rounded-lg overflow-hidden">
+      <div className="mt-4 rounded-lg border bg-card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="font-medium">Activity Logs</h3>
+            <p className="text-sm text-muted-foreground">Recent AI interaction checks and replies from Facebook.</p>
+          </div>
+          <span className="text-xs text-muted-foreground">{aiReplyLogs.length} event{aiReplyLogs.length === 1 ? "" : "s"}</span>
+        </div>
+        <div className="space-y-2 max-h-60 overflow-auto">
+          {aiReplyLogs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No activity yet. Trigger the check to begin.</p>
+          ) : (
+            aiReplyLogs.map((entry: any, index: number) => (
+              <div key={entry.id || `${entry.timestamp || "log"}-${index}`} className="rounded border bg-background/60 p-2 text-sm">
+                <div className="text-xs text-muted-foreground">{entry.timestamp ? new Date(entry.timestamp).toLocaleString() : "—"}</div>
+                <div>{entry.message}</div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="border rounded-lg overflow-hidden mt-4">
         <Table>
           <TableHeader>
             <TableRow className="bg-surface">

@@ -11,6 +11,27 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
 };
 
+type AiReplyLogEntry = {
+  id: string;
+  type: "interaction" | "success" | "error" | "info";
+  message: string;
+  timestamp: string;
+};
+
+const aiReplyLogs: AiReplyLogEntry[] = [];
+
+function appendAiReplyLog(type: AiReplyLogEntry["type"], message: string) {
+  aiReplyLogs.unshift({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type,
+    message,
+    timestamp: new Date().toISOString(),
+  });
+  if (aiReplyLogs.length > 20) {
+    aiReplyLogs.length = 20;
+  }
+}
+
 // Get DATABASE_URL with proper formatting
 function getDatabaseUrl(): string {
   let dbUrl = Deno.env.get("DATABASE_URL");
@@ -587,6 +608,136 @@ async function handleGenerateAutoreply(req: Request): Promise<Response> {
   } catch (e) {
     console.error("POST /api/generate-autoreply error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers: corsHeaders });
+  }
+}
+
+async function handleAiReply(req: Request): Promise<Response> {
+  if (req.method === "GET") {
+    return new Response(JSON.stringify(aiReplyLogs), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+  }
+
+  try {
+    const pageId = Deno.env.get("VITE_FACEBOOK_PAGE_ID") || Deno.env.get("FACEBOOK_PAGE_ID") || "";
+    const accessToken = Deno.env.get("VITE_FACEBOOK_PAGE_ACCESS_TOKEN") || Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") || "";
+
+    if (!pageId || !accessToken) {
+      appendAiReplyLog("error", "[AI Reply Check] Missing Facebook page credentials.");
+      return new Response(JSON.stringify({ success: false, error: "Missing Facebook page credentials", logs: aiReplyLogs }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const postsUrl = `https://graph.facebook.com/v20.0/${pageId}/published_posts?fields=id,message,created_time&limit=1&access_token=${encodeURIComponent(accessToken)}`;
+    const postsRes = await fetch(postsUrl);
+    const postsData = await postsRes.json();
+
+    if (!postsRes.ok || postsData.error) {
+      const message = postsData.error?.message || "Unable to fetch latest published post.";
+      appendAiReplyLog("error", `[AI Reply Check] ${message}`);
+      return new Response(JSON.stringify({ success: false, error: message, logs: aiReplyLogs }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const latestPost = postsData.data?.[0];
+    if (!latestPost?.id) {
+      appendAiReplyLog("info", "[AI Reply Check] No published posts found.");
+      return new Response(JSON.stringify({ success: true, message: "No published posts found", logs: aiReplyLogs }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const commentsUrl = `https://graph.facebook.com/v20.0/${latestPost.id}/comments?fields=id,message,from,created_time&limit=5&access_token=${encodeURIComponent(accessToken)}`;
+    const commentsRes = await fetch(commentsUrl);
+    const commentsData = await commentsRes.json();
+
+    if (!commentsRes.ok || commentsData.error) {
+      const message = commentsData.error?.message || "Unable to fetch comments.";
+      appendAiReplyLog("error", `[AI Reply Check] ${message}`);
+      return new Response(JSON.stringify({ success: false, error: message, logs: aiReplyLogs }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const eligibleComment = (commentsData.data || []).find((comment: any) => {
+      const isOwnComment = comment?.from?.id === pageId;
+      return !isOwnComment && typeof comment?.message === "string" && comment.message.trim().length > 0;
+    });
+
+    if (!eligibleComment) {
+      appendAiReplyLog("info", `[AI Reply Check] No eligible comments found on the latest post.`);
+      return new Response(JSON.stringify({ success: true, message: "No eligible comments found", logs: aiReplyLogs }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const username = eligibleComment.from?.name || eligibleComment.from?.id || "Unknown user";
+    const commentText = eligibleComment.message.trim();
+    appendAiReplyLog("interaction", `[Interaction Detected] Comment by ${username}: ${commentText}`);
+
+    const groqApiKey = Deno.env.get("GROQ_API_KEY");
+    if (!groqApiKey) {
+      appendAiReplyLog("error", "[AI Reply Check] GROQ_API_KEY not configured.");
+      return new Response(JSON.stringify({ success: false, error: "GROQ_API_KEY not configured", logs: aiReplyLogs }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const dbUrl = getDatabaseUrl();
+    const replyResult = await generateAutoreply(dbUrl, groqApiKey, commentText, latestPost.id);
+    const replyText = replyResult?.reply || replyResult?.response || "Thanks for your comment!";
+
+    const likeUrl = `https://graph.facebook.com/v20.0/${eligibleComment.id}/likes?access_token=${encodeURIComponent(accessToken)}`;
+    const likeRes = await fetch(likeUrl, { method: "POST" });
+    const likeData = await likeRes.json();
+    if (likeData.error) {
+      appendAiReplyLog("error", `[AI Reply Check] Like failed: ${likeData.error.message || JSON.stringify(likeData.error)}`);
+      return new Response(JSON.stringify({ success: false, error: likeData.error.message || "Like failed", logs: aiReplyLogs }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const replyUrl = `https://graph.facebook.com/v20.0/${eligibleComment.id}/comments?access_token=${encodeURIComponent(accessToken)}`;
+    const replyRes = await fetch(replyUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: replyText }),
+    });
+    const replyData = await replyRes.json();
+
+    if (!replyRes.ok || replyData.error) {
+      const message = replyData.error?.message || "Reply failed.";
+      appendAiReplyLog("error", `[AI Reply Check] ${message}`);
+      return new Response(JSON.stringify({ success: false, error: message, logs: aiReplyLogs }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    appendAiReplyLog("success", `[AI Replied] ${username}: ${replyText}`);
+
+    return new Response(JSON.stringify({ success: true, message: "AI reply check completed", logs: aiReplyLogs }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    appendAiReplyLog("error", `[AI Reply Check] ${errorMessage}`);
+    console.error("POST /api/ai-reply error:", errorMessage);
+    return new Response(JSON.stringify({ success: false, error: errorMessage, logs: aiReplyLogs }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 }
 
@@ -1465,6 +1616,7 @@ Deno.serve(async (req) => {
       console.log("Matched POST /api/trends");
       return await handleTrendsCreate(req);
     }
+    if (path === "/api/ai-reply") return await handleAiReply(req);
     if (path === "/api/posts" && method === "GET") return await handlePostsList(req);
     if (path.startsWith("/api/posts/") && method === "DELETE") {
       const postId = path.split("/")[3];
