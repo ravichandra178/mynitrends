@@ -655,7 +655,12 @@ async function handleAiReply(req: Request): Promise<Response> {
       });
     }
 
-    const commentsUrl = `https://graph.facebook.com/v20.0/${latestPost.id}/comments?fields=id,message,from,created_time&limit=5&order=reverse_chronological&access_token=${encodeURIComponent(accessToken)}`;
+    const postLimit = Number.parseInt(Deno.env.get("POST_LIMIT") || "", 10);
+    const replyThreadLimit = Number.parseInt(Deno.env.get("REPLY_THREAD_LIMIT") || "", 10);
+    const resolvedPostLimit = Number.isFinite(postLimit) && postLimit > 0 ? postLimit : 1;
+    const resolvedReplyThreadLimit = Number.isFinite(replyThreadLimit) && replyThreadLimit > 0 ? replyThreadLimit : 5;
+
+    const commentsUrl = `https://graph.facebook.com/v20.0/${latestPost.id}/comments?fields=id,message,from,created_time,replies.limit(${resolvedReplyThreadLimit}){id,message,from,created_time}&limit=${resolvedPostLimit}&order=reverse_chronological&access_token=${encodeURIComponent(accessToken)}`;
     const commentsRes = await fetch(commentsUrl);
     const commentsData = await commentsRes.json();
 
@@ -668,7 +673,15 @@ async function handleAiReply(req: Request): Promise<Response> {
       });
     }
 
-    const eligibleComment = (commentsData.data || []).find((comment: any) => {
+    const allComments: any[] = [];
+    for (const comment of commentsData.data || []) {
+      allComments.push(comment);
+      if (comment?.replies?.data && Array.isArray(comment.replies.data)) {
+        allComments.push(...comment.replies.data);
+      }
+    }
+
+    const eligibleComment = allComments.find((comment: any) => {
       const isOwnComment = comment?.from?.id === pageId;
       return !isOwnComment && typeof comment?.message === "string" && comment.message.trim().length > 0;
     });
