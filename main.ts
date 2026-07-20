@@ -29,8 +29,8 @@ function appendAiReplyLog(type: AiReplyLogEntry["type"], message: string) {
     message,
     timestamp: new Date().toISOString(),
   });
-  if (aiReplyLogs.length > 20) {
-    aiReplyLogs.length = 20;
+  if (aiReplyLogs.length > 30) {
+    aiReplyLogs.length = 30;
   }
 }
 
@@ -664,170 +664,107 @@ async function handleAiReply(req: Request): Promise<Response> {
   }
 
   try {
-    const pageId = Deno.env.get("VITE_FACEBOOK_PAGE_ID") || Deno.env.get("FACEBOOK_PAGE_ID") || "";
-    const accessToken = Deno.env.get("VITE_FACEBOOK_PAGE_ACCESS_TOKEN") || Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") || "";
+    const pageId = Deno.env.get("FACEBOOK_PAGE_ID") || Deno.env.get("VITE_FACEBOOK_PAGE_ID") || "";
+    const accessToken = Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") || Deno.env.get("VITE_FACEBOOK_PAGE_ACCESS_TOKEN") || "";
 
     if (!pageId || !accessToken) {
-      appendAiReplyLog("error", "[AI Reply Check] Missing Facebook page credentials.");
-      return new Response(JSON.stringify({ success: false, error: "Missing Facebook page credentials", logs: aiReplyLogs }), {
+      appendAiReplyLog("error", "Missing Facebook page credentials");
+      return new Response(JSON.stringify({ success: false, error: "Missing Facebook credentials" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const postLimit = Number.parseInt(Deno.env.get("POST_LIMIT") || "", 10);
-    const replyThreadLimit = Number.parseInt(Deno.env.get("REPLY_THREAD_LIMIT") || "", 10);
-    const resolvedPostLimit = Number.isFinite(postLimit) && postLimit > 0 ? postLimit : 1;
-    const resolvedReplyThreadLimit = Number.isFinite(replyThreadLimit) && replyThreadLimit > 0 ? replyThreadLimit : 5;
-    
-    const postsUrl = `https://graph.facebook.com/v20.0/${pageId}/published_posts?fields=id,message,created_time&limit=${resolvedPostLimit}&access_token=${encodeURIComponent(accessToken)}`;
+    const postLimit = Number(Deno.env.get("POST_LIMIT") || "3");
+    const replyLimit = Number(Deno.env.get("REPLY_THREAD_LIMIT") || "10");
+
+    // Fetch recent posts
+    const postsUrl = `https://graph.facebook.com/v20.0/${pageId}/published_posts?fields=id,message,created_time&limit=${postLimit}&access_token=${encodeURIComponent(accessToken)}`;
     const postsRes = await fetch(postsUrl);
     const postsData = await postsRes.json();
 
     if (!postsRes.ok || postsData.error) {
-      const message = postsData.error?.message || "Unable to fetch published posts.";
-      appendAiReplyLog("error", `[AI Reply Check] ${message}`);
-      return new Response(JSON.stringify({ success: false, error: message, logs: aiReplyLogs }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const msg = postsData.error?.message || "Failed to fetch posts";
+      appendAiReplyLog("error", msg);
+      return new Response(JSON.stringify({ success: false, error: msg }), { status: 502, headers: corsHeaders });
     }
 
     const posts = postsData.data || [];
-    if (posts.length === 0) {
-      appendAiReplyLog("info", "[AI Reply Check] No published posts found.");
-      return new Response(JSON.stringify({ success: true, message: "No published posts found", logs: aiReplyLogs }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
+    let targetComment: any = null;
     let targetPostId = "";
-    let eligibleComment: any = null;
 
-    // Scan through fetched posts to look for a matching comment interaction
     for (const post of posts) {
-      // FIX 1: Move these tracking structures INSIDE the loop so data doesn't leak between posts
-      const alreadyRepliedCommentIds = new Set<string>();
-      const ownReplyIds = new Set<string>();
-
-      const commentsUrl = `https://graph.facebook.com/v20.0/${post.id}/comments?fields=id,message,from,created_time,replies.limit(${resolvedReplyThreadLimit}){id,message,from,created_time}&limit=100&order=reverse_chronological&access_token=${encodeURIComponent(accessToken)}`;
+      const commentsUrl = `https://graph.facebook.com/v20.0/${post.id}/comments?fields=id,message,from,created_time,replies.limit(${replyLimit}){id,message,from,created_time,parent}&access_token=${encodeURIComponent(accessToken)}`;
       const commentsRes = await fetch(commentsUrl);
       const commentsData = await commentsRes.json();
 
       if (!commentsRes.ok || !commentsData.data) continue;
 
-      const currentPostComments: any[] = [];
-      for (const comment of commentsData.data) {
-        comment.parent_comment_id = null; 
-        currentPostComments.push(comment);
-
-        if (comment?.replies?.data && Array.isArray(comment.replies.data)) {
-          for (const reply of comment.replies.data) {
-            reply.parent_comment_id = comment.id; 
-            currentPostComments.push(reply);
-
-            // Track individual reply IDs made by the page to prevent responding to yourself
-            if (reply?.from?.id === pageId) {
-              ownReplyIds.add(reply.id);
-            }
-          }
-
-          const hasOwnReply = comment.replies.data.some((reply: any) => reply?.from?.id === pageId);
-          if (hasOwnReply) {
-            alreadyRepliedCommentIds.add(comment.id);
+      // Flatten comments + replies
+      const allComments: any[] = [];
+      for (const c of commentsData.data) {
+        allComments.push({ ...c, isReply: false });
+        if (c.replies?.data) {
+          for (const r of c.replies.data) {
+            allComments.push({ ...r, isReply: true, parentId: c.id });
           }
         }
       }
 
-      // Sort by timeline sequence
-      currentPostComments.sort((a, b) => new Date(b.created_time).getTime() - new Date(a.created_time).getTime());
+      // Find the newest comment that we haven't replied to yet
+      const newestUnreplied = allComments
+        .filter(c => c.from?.id !== pageId) // Not our own comment
+        .sort((a, b) => new Date(b.created_time).getTime() - new Date(a.created_time).getTime())[0];
 
-      const match = currentPostComments.find((c: any) => {
-        const isOwnComment = c?.from?.id === pageId;
-        
-        let hasBeenAnswered = false;
-        if (c.parent_comment_id) {
-          // If it's a nested reply, check if parent thread is done OR if this specific reply is yours
-          hasBeenAnswered = alreadyRepliedCommentIds.has(c.parent_comment_id) || ownReplyIds.has(c.id);
-        } else {
-          hasBeenAnswered = alreadyRepliedCommentIds.has(c.id);
-        }
-
-        return !isOwnComment && !hasBeenAnswered && typeof c?.message === "string" && c.message.trim().length > 0;
-      });
-
-      if (match) {
-        eligibleComment = match;
+      if (newestUnreplied) {
+        targetComment = newestUnreplied;
         targetPostId = post.id;
-        break; 
+        break;
       }
     }
 
-    if (!eligibleComment) {
-      appendAiReplyLog("info", `[AI Reply Check] No new eligible comments found across recent posts.`);
-      return new Response(JSON.stringify({ success: true, message: "No eligible comments found", logs: aiReplyLogs }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (!targetComment) {
+      appendAiReplyLog("info", "No new comments found to reply to.");
+      return new Response(JSON.stringify({ success: true, message: "No new comments" }), { headers: corsHeaders });
     }
 
-    const username = eligibleComment.from?.name || eligibleComment.from?.id || "Unknown user";
-    const commentText = eligibleComment.message.trim();
-    appendAiReplyLog("interaction", `[Interaction Detected] Comment by ${username}: ${commentText}`);
+    appendAiReplyLog("interaction", `New comment from ${targetComment.from?.name}: ${targetComment.message}`);
 
+    // Generate AI reply
     const groqApiKey = Deno.env.get("GROQ_API_KEY");
-    if (!groqApiKey) {
-      appendAiReplyLog("error", "[AI Reply Check] GROQ_API_KEY not configured.");
-      return new Response(JSON.stringify({ success: false, error: "GROQ_API_KEY not configured", logs: aiReplyLogs }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const dbUrl = getDatabaseUrl();
-    const replyResult = await generateAutoreply(dbUrl, groqApiKey, commentText, targetPostId);
-    const replyText = replyResult?.reply || replyResult?.response || "Thanks for your comment!";
+    const replyResult = await generateAutoreply(dbUrl, groqApiKey!, targetComment.message, targetPostId);
+    const replyText = replyResult?.reply || "Thank you for your comment!";
 
-    // Action execution
-    const likeUrl = `https://graph.facebook.com/v20.0/${eligibleComment.id}/likes?access_token=${encodeURIComponent(accessToken)}`;
-    const likeRes = await fetch(likeUrl, { method: "POST" });
-    await likeRes.json();
+    // Like the comment
+    await fetch(`https://graph.facebook.com/v20.0/${targetComment.id}/likes?access_token=${encodeURIComponent(accessToken)}`, { method: "POST" });
 
-    const replyTargetId = getReplyTargetId(eligibleComment);
-    if (!replyTargetId) {
-      throw new Error("Unable to resolve a reply target for the selected comment thread.");
-    }
+    // **CRITICAL FIX**: Use correct reply target
+    const replyTargetId = getReplyTargetId(targetComment) || targetComment.id;
 
     const replyUrl = `https://graph.facebook.com/v20.0/${replyTargetId}/comments?access_token=${encodeURIComponent(accessToken)}`;
-    
+
     const replyRes = await fetch(replyUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: replyText }),
     });
+
     const replyData = await replyRes.json();
 
     if (!replyRes.ok || replyData.error) {
-      const message = replyData.error?.message || "Reply failed.";
-      appendAiReplyLog("error", `[AI Reply Check] ${message}`);
-      return new Response(JSON.stringify({ success: false, error: message, logs: aiReplyLogs }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      appendAiReplyLog("error", `Reply failed: ${replyData.error?.message}`);
+      return new Response(JSON.stringify({ success: false, error: replyData.error?.message }), { status: 502, headers: corsHeaders });
     }
 
-    appendAiReplyLog("success", `[AI Replied] ${username}: ${replyText}`);
-    return new Response(JSON.stringify({ success: true, message: "AI reply check completed", logs: aiReplyLogs }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    appendAiReplyLog("success", `Replied to comment: ${replyText}`);
+    return new Response(JSON.stringify({ success: true, message: "AI replied successfully" }), { headers: corsHeaders });
 
   } catch (e) {
-    const errorMessage = e instanceof Error ? e.message : String(e);
-    appendAiReplyLog("error", `[AI Reply Check] ${errorMessage}`);
-    console.error("POST /api/ai-reply error:", errorMessage);
-    return new Response(JSON.stringify({ success: false, error: errorMessage, logs: aiReplyLogs }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    const msg = e instanceof Error ? e.message : String(e);
+    appendAiReplyLog("error", msg);
+    console.error("AI Reply Error:", msg);
+    return new Response(JSON.stringify({ success: false, error: msg }), { status: 500, headers: corsHeaders });
   }
 }
 
