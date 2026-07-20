@@ -669,16 +669,17 @@ async function handleAiReply(req: Request): Promise<Response> {
 
     if (!pageId || !accessToken) {
       appendAiReplyLog("error", "Missing Facebook page credentials");
-      return new Response(JSON.stringify({ success: false, error: "Missing Facebook credentials" }), {
+      return new Response(JSON.stringify({ success: false, error: "Missing Facebook credentials", logs: aiReplyLogs }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    appendAiReplyLog("info", "Starting AI reply check...");
+
     const postLimit = Number(Deno.env.get("POST_LIMIT") || "3");
     const replyLimit = Number(Deno.env.get("REPLY_THREAD_LIMIT") || "10");
 
-    // Fetch recent posts
     const postsUrl = `https://graph.facebook.com/v20.0/${pageId}/published_posts?fields=id,message,created_time&limit=${postLimit}&access_token=${encodeURIComponent(accessToken)}`;
     const postsRes = await fetch(postsUrl);
     const postsData = await postsRes.json();
@@ -686,62 +687,56 @@ async function handleAiReply(req: Request): Promise<Response> {
     if (!postsRes.ok || postsData.error) {
       const msg = postsData.error?.message || "Failed to fetch posts";
       appendAiReplyLog("error", msg);
-      return new Response(JSON.stringify({ success: false, error: msg }), { status: 502, headers: corsHeaders });
+      return new Response(JSON.stringify({ success: false, error: msg, logs: aiReplyLogs }), { status: 502, headers: corsHeaders });
     }
 
     const posts = postsData.data || [];
     let targetComment: any = null;
-    let targetPostId = "";
 
     for (const post of posts) {
-      const commentsUrl = `https://graph.facebook.com/v20.0/${post.id}/comments?fields=id,message,from,created_time,replies.limit(${replyLimit}){id,message,from,created_time,parent}&access_token=${encodeURIComponent(accessToken)}`;
+      const commentsUrl = `https://graph.facebook.com/v20.0/${post.id}/comments?fields=id,message,from,created_time,replies.limit(${replyLimit}){id,message,from,created_time}&access_token=${encodeURIComponent(accessToken)}`;
       const commentsRes = await fetch(commentsUrl);
       const commentsData = await commentsRes.json();
 
       if (!commentsRes.ok || !commentsData.data) continue;
 
-      // Flatten comments + replies
       const allComments: any[] = [];
       for (const c of commentsData.data) {
-        allComments.push({ ...c, isReply: false });
-        if (c.replies?.data) {
-          for (const r of c.replies.data) {
-            allComments.push({ ...r, isReply: true, parentId: c.id });
-          }
-        }
+        allComments.push(c);
+        if (c.replies?.data) allComments.push(...c.replies.data);
       }
 
-      // Find the newest comment that we haven't replied to yet
       const newestUnreplied = allComments
-        .filter(c => c.from?.id !== pageId) // Not our own comment
+        .filter(c => c.from?.id !== pageId)
         .sort((a, b) => new Date(b.created_time).getTime() - new Date(a.created_time).getTime())[0];
 
       if (newestUnreplied) {
         targetComment = newestUnreplied;
-        targetPostId = post.id;
         break;
       }
     }
 
     if (!targetComment) {
-      appendAiReplyLog("info", "No new comments found to reply to.");
-      return new Response(JSON.stringify({ success: true, message: "No new comments" }), { headers: corsHeaders });
+      appendAiReplyLog("info", "No new eligible comments found.");
+      return new Response(JSON.stringify({ success: true, message: "No new comments", logs: aiReplyLogs }), { headers: corsHeaders });
     }
 
-    appendAiReplyLog("interaction", `New comment from ${targetComment.from?.name}: ${targetComment.message}`);
+    appendAiReplyLog("interaction", `Found comment from ${targetComment.from?.name || "User"}: "${targetComment.message.substring(0, 80)}..."`);
 
-    // Generate AI reply
     const groqApiKey = Deno.env.get("GROQ_API_KEY");
+    if (!groqApiKey) {
+      appendAiReplyLog("error", "GROQ_API_KEY not configured");
+      return new Response(JSON.stringify({ success: false, error: "GROQ_API_KEY not configured", logs: aiReplyLogs }), { status: 500, headers: corsHeaders });
+    }
+
     const dbUrl = getDatabaseUrl();
-    const replyResult = await generateAutoreply(dbUrl, groqApiKey!, targetComment.message, targetPostId);
+    const replyResult = await generateAutoreply(dbUrl, groqApiKey, targetComment.message, targetComment.id);
     const replyText = replyResult?.reply || "Thank you for your comment!";
 
-    // Like the comment
+    // Like + Reply
     await fetch(`https://graph.facebook.com/v20.0/${targetComment.id}/likes?access_token=${encodeURIComponent(accessToken)}`, { method: "POST" });
 
-    // **CRITICAL FIX**: Use correct reply target
     const replyTargetId = getReplyTargetId(targetComment) || targetComment.id;
-
     const replyUrl = `https://graph.facebook.com/v20.0/${replyTargetId}/comments?access_token=${encodeURIComponent(accessToken)}`;
 
     const replyRes = await fetch(replyUrl, {
@@ -754,17 +749,21 @@ async function handleAiReply(req: Request): Promise<Response> {
 
     if (!replyRes.ok || replyData.error) {
       appendAiReplyLog("error", `Reply failed: ${replyData.error?.message}`);
-      return new Response(JSON.stringify({ success: false, error: replyData.error?.message }), { status: 502, headers: corsHeaders });
+      return new Response(JSON.stringify({ success: false, error: replyData.error?.message, logs: aiReplyLogs }), { status: 502, headers: corsHeaders });
     }
 
-    appendAiReplyLog("success", `Replied to comment: ${replyText}`);
-    return new Response(JSON.stringify({ success: true, message: "AI replied successfully" }), { headers: corsHeaders });
+    appendAiReplyLog("success", `Successfully replied: "${replyText}"`);
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: "AI replied successfully in thread",
+      logs: aiReplyLogs 
+    }), { headers: corsHeaders });
 
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     appendAiReplyLog("error", msg);
     console.error("AI Reply Error:", msg);
-    return new Response(JSON.stringify({ success: false, error: msg }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ success: false, error: msg, logs: aiReplyLogs }), { status: 500, headers: corsHeaders });
   }
 }
 
