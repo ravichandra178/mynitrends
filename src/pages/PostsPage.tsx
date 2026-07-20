@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchPosts, deletePost, updatePostContent, updatePostSchedule, postToFacebook, updatePostImage } from "@/lib/api-helpers";
+import { fetchPosts, deletePost, updatePostContent, updatePostSchedule, postToFacebook, updatePostImage, syncPostEngagement } from "@/lib/api-helpers";
 import { toast } from "sonner";
 import { Send, Trash2, RefreshCw, Loader2, ThumbsUp, MessageSquare } from "lucide-react";
 import { format } from "date-fns";
@@ -91,9 +91,9 @@ export default function PostsPage() {
   const handleRefreshEngagement = async (postId: string, fbPostId: string) => {
     setRefreshingId(postId);
     try {
-      // TODO: Implement engagement fetch endpoint
-      toast.info("Engagement fetch not yet implemented");
+      const result = await syncPostEngagement(postId, fbPostId);
       queryClient.invalidateQueries({ queryKey: ["posts"] });
+      toast.success(`Engagement synced: ${result.likes ?? 0} likes, ${result.comments ?? 0} comments`);
     } catch (e: any) {
       toast.error(e.message || "Failed to fetch engagement");
     } finally {

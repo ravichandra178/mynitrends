@@ -5,6 +5,7 @@ import { InferenceClient } from "https://esm.sh/@huggingface/inference";
 import { generatePost } from "./functions/generate-post.ts";
 import { generateTrends } from "./functions/generate-trends.ts";
 import { generateAutoreply } from "./functions/generate-autoreply.ts";
+import { getReplyTargetId } from "./src/lib/facebook-thread-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -567,19 +568,58 @@ async function handleFetchEngagement(req: Request): Promise<Response> {
     }
 
     const deploymentUrl = getDeploymentUrl(req);
-    
-    const funcRes = await fetch(`${deploymentUrl}/functions/v1/fetch-engagement`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ postId, facebookPostId }),
-    });
+    const settings = await getSettingsFromDb();
+    const accessToken = settings.facebook_page_access_token || Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") || Deno.env.get("VITE_FACEBOOK_PAGE_ACCESS_TOKEN") || "";
 
-    if (!funcRes.ok) throw new Error("Failed to fetch engagement");
-    const data = await funcRes.json();
-    
-    return new Response(JSON.stringify(data), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    if (!accessToken) {
+      return new Response(JSON.stringify({ error: "Facebook access token not configured" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    try {
+      const fbRes = await fetch(
+        `https://graph.facebook.com/v20.0/${facebookPostId}?fields=likes.summary(true),comments.summary(true)&access_token=${encodeURIComponent(accessToken)}`
+      );
+      const fbData = await fbRes.json();
+
+      if (!fbRes.ok || fbData.error) {
+        throw new Error(fbData.error?.message || "Failed to fetch Facebook engagement");
+      }
+
+      const likes = fbData.likes?.summary?.total_count ?? 0;
+      const comments = fbData.comments?.summary?.total_count ?? 0;
+
+      const client = await getConnection();
+      try {
+        await client.queryObject("UPDATE posts SET engagement_likes = $1, engagement_comments = $2 WHERE id = $3", [likes, comments, postId]);
+      } finally {
+        await client.end();
+      }
+
+      return new Response(JSON.stringify({ success: true, likes, comments }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch (directError) {
+      // Fallback to the deployed Supabase function if the direct Graph call fails.
+      try {
+        const funcRes = await fetch(`${deploymentUrl}/functions/v1/fetch-engagement`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ postId, facebookPostId }),
+        });
+
+        if (!funcRes.ok) throw new Error("Failed to fetch engagement");
+        const data = await funcRes.json();
+
+        return new Response(JSON.stringify(data), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (_fallbackError) {
+        throw directError;
+      }
+    }
   } catch (e) {
     console.error("POST /api/fetch-engagement error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers: corsHeaders });
@@ -752,8 +792,12 @@ async function handleAiReply(req: Request): Promise<Response> {
     const likeRes = await fetch(likeUrl, { method: "POST" });
     await likeRes.json();
 
-    // FIX 2 & 3: Target the exact user comment ID to ensure it replies inline to their action
-    const replyUrl = `https://graph.facebook.com/v20.0/${eligibleComment.id}/comments?access_token=${encodeURIComponent(accessToken)}`;
+    const replyTargetId = getReplyTargetId(eligibleComment);
+    if (!replyTargetId) {
+      throw new Error("Unable to resolve a reply target for the selected comment thread.");
+    }
+
+    const replyUrl = `https://graph.facebook.com/v20.0/${replyTargetId}/comments?access_token=${encodeURIComponent(accessToken)}`;
     
     const replyRes = await fetch(replyUrl, {
       method: "POST",

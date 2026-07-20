@@ -158,6 +158,26 @@ export async function updatePostImage(id: string, imageUrl: string) {
   }
 }
 
+export async function syncPostEngagement(postId: string, facebookPostId: string) {
+  console.log("[API] Syncing engagement for post:", postId, facebookPostId);
+  try {
+    const response = await fetch(`${API_BASE}/api/fetch-engagement`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ postId, facebookPostId }),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    }
+    const data = await response.json();
+    console.log("[API] ✅ Engagement synced:", data);
+    return data;
+  } catch (e) {
+    console.error("[API] ❌ Failed to sync engagement:", e);
+    throw new Error("Failed to sync engagement");
+  }
+}
+
 // ====================================
 // SETTINGS API
 // ====================================
