@@ -694,7 +694,8 @@ async function handleAiReply(req: Request): Promise<Response> {
     let targetComment: any = null;
 
     for (const post of posts) {
-      const commentsUrl = `https://graph.facebook.com/v20.0/${post.id}/comments?fields=id,message,from,created_time,replies.limit(${replyLimit}){id,message,from,created_time}&access_token=${encodeURIComponent(accessToken)}`;
+      // FIX: Added 'parent{id}' to the fields query to identify nested comments
+      const commentsUrl = `https://graph.facebook.com/v20.0/${post.id}/comments?fields=id,message,from,created_time,parent{id},replies.limit(${replyLimit}){id,message,from,created_time,parent{id}}&access_token=${encodeURIComponent(accessToken)}`;
       const commentsRes = await fetch(commentsUrl);
       const commentsData = await commentsRes.json();
 
@@ -733,10 +734,12 @@ async function handleAiReply(req: Request): Promise<Response> {
     const replyResult = await generateAutoreply(dbUrl, groqApiKey, targetComment.message, targetComment.id);
     const replyText = replyResult?.reply || "Thank you for your comment!";
 
-    // Like + Reply
+    // Like the comment
     await fetch(`https://graph.facebook.com/v20.0/${targetComment.id}/likes?access_token=${encodeURIComponent(accessToken)}`, { method: "POST" });
 
-    const replyTargetId = getReplyTargetId(targetComment) || targetComment.id;
+    // FIX: Determine reply target. If it's a nested comment, we must reply to the parent.
+    // If targetComment.parent exists, we reply to the parent ID.
+    const replyTargetId = targetComment.parent?.id || targetComment.id;
     const replyUrl = `https://graph.facebook.com/v20.0/${replyTargetId}/comments?access_token=${encodeURIComponent(accessToken)}`;
 
     const replyRes = await fetch(replyUrl, {
@@ -752,7 +755,7 @@ async function handleAiReply(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ success: false, error: replyData.error?.message, logs: aiReplyLogs }), { status: 502, headers: corsHeaders });
     }
 
-    appendAiReplyLog("success", `Successfully replied: "${replyText}"`);
+    appendAiReplyLog("success", `Successfully replied to ${targetComment.parent?.id ? "nested thread" : "post"}: "${replyText}"`);
     return new Response(JSON.stringify({ 
       success: true, 
       message: "AI replied successfully in thread",
