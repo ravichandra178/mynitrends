@@ -1,7 +1,7 @@
 /// <reference lib="deno.window" />
 /// <reference lib="deno.ns" />
 import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
-import { InferenceClient } from "https://esm.sh/@huggingface/inference@3.0.0";
+import { InferenceClient } from "https://esm.sh/@huggingface/inference";
 import { generatePost } from "./functions/generate-post.ts";
 import { generateTrends } from "./functions/generate-trends.ts";
 import { generateAutoreply } from "./functions/generate-autoreply.ts";
@@ -280,9 +280,9 @@ async function handleGeneratePost(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: "Missing trendId or topic" }), { status: 400, headers: corsHeaders });
     }
 
-    const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
+    const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY") ?? "";
     const dbUrl = getDatabaseUrl();
-    const groqApiKey = Deno.env.get("GROQ_API_KEY");
+    const groqApiKey = Deno.env.get("GROQ_API_KEY") ?? "";
     const hfTextModel = (Deno.env.get("HF_TEXT_MODEL") || "Qwen/Qwen2.5-7B-Instruct").trim();
     const hfModel = (Deno.env.get("HF_MODEL") || "stabilityai/stable-diffusion-xl-base-1.0").trim();
     
@@ -308,8 +308,8 @@ async function handleGeneratePost(req: Request): Promise<Response> {
 async function handleGenerateTrends(req: Request): Promise<Response> {
   try {
     console.log("📊 POST /api/generate-trends - Starting trends generation");
-    const groqApiKey = Deno.env.get("GROQ_API_KEY");
-    const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY");
+    const groqApiKey = Deno.env.get("GROQ_API_KEY") ?? "";
+    const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY") ?? "";
     const dbUrl = getDatabaseUrl();
     
     if (!groqApiKey && !hfApiKey) {
@@ -1058,12 +1058,12 @@ async function handleTestHFImage(req: Request): Promise<Response> {
     let imageBlob: Blob | null = null;
     try {
       const client = new InferenceClient(hfApiKey);
-      imageBlob = await client.textToImage({
-        provider: "fal-ai",
+      const inferredImage = await client.textToImage({
         model: hfModel,
         inputs: imagePrompt,
         parameters: { num_inference_steps: numInferenceSteps },
-      });
+      }) as unknown as Blob;
+      imageBlob = inferredImage;
     } catch (error) {
       console.warn(`[TEST] InferenceClient failed, falling back to router request:`, error);
     }

@@ -1,24 +1,55 @@
 import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
+import { InferenceClient } from "https://esm.sh/@huggingface/inference";
+
+function resolveHfToken(token?: string): string | undefined {
+  return (token || Deno.env.get("HUGGINGFACE_API_KEY") || "").trim() || undefined;
+}
+
+function resolveHfModel(defaultModel: string): string {
+  return (Deno.env.get("HF_MODEL") || defaultModel).trim();
+}
 
 async function generateImageWithInferenceClient(hfApiKey: string, model: string, prompt: string): Promise<Blob | null> {
-  const response = await fetch(`https://router.huggingface.co/hf-inference/models/${model}`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${hfApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      inputs: prompt,
-      parameters: { num_inference_steps: 5 },
-      provider: "fal-ai"
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`HF Router Error: ${response.status} - ${await response.text()}`);
+  const token = resolveHfToken(hfApiKey);
+  if (!token) {
+    throw new Error("HUGGINGFACE_API_KEY is not configured");
   }
 
-  return await response.blob();
+  const client = new InferenceClient(token);
+  const fallbackModel = "stabilityai/stable-diffusion-xl-base-1.0";
+  const candidates = [model, resolveHfModel(fallbackModel), fallbackModel].filter(Boolean);
+
+  for (const candidateModel of candidates) {
+    try {
+      const result = await client.textToImage({
+        model: candidateModel,
+        inputs: prompt,
+        parameters: { num_inference_steps: 5 },
+      });
+
+      const normalizedResult: any = result;
+      if (normalizedResult instanceof Blob) {
+        return normalizedResult;
+      }
+
+      if (normalizedResult instanceof Uint8Array) {
+        const bytes = normalizedResult as Uint8Array;
+        const imageBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+        return new Blob([imageBuffer], { type: "image/png" });
+      }
+
+      if (typeof normalizedResult === "string") {
+        return new Blob([normalizedResult], { type: "image/png" });
+      }
+    } catch (error) {
+      console.warn(`[IMAGE] HF model ${candidateModel} failed:`, error);
+      if (candidateModel === candidates[candidates.length - 1]) {
+        throw error;
+      }
+    }
+  }
+
+  return null;
 }
 
 export async function generatePost(
@@ -245,9 +276,9 @@ Return ONLY the prompt, nothing else.`
       let imageBlob: Blob | null = null;
       try {
         imageBlob = await generateImageWithInferenceClient(hfApiKey, primaryModel, imagePrompt);
-        console.log(`[IMAGE] ✅ InferenceClient success with ${primaryModel}`);
+        console.log(`[IMAGE] ✅ Hugging Face inference success with ${primaryModel}`);
       } catch (e) {
-        console.error(`[IMAGE] InferenceClient failed for ${primaryModel}:`, e);
+        console.error(`[IMAGE] Hugging Face inference failed for ${primaryModel}:`, e);
       }
 
       if (imageBlob) {

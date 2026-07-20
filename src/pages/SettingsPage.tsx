@@ -13,22 +13,36 @@ import { toast } from "sonner";
 const API_BASE = '';
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
 
+const envMeta = (import.meta as any).env || {};
+const getEnvValue = (key: string) => String(envMeta[key] || envMeta[`VITE_${key}`] || "").trim();
+
+const aiEnvDefaults = {
+  facebook_app_id: getEnvValue("FACEBOOK_APP_ID"),
+  facebook_page_id: getEnvValue("FACEBOOK_PAGE_ID"),
+  facebook_page_access_token: getEnvValue("FACEBOOK_PAGE_ACCESS_TOKEN"),
+  groq_model: getEnvValue("GROQ_MODEL") || "llama-3.1-8b-instant",
+  hf_model: getEnvValue("HF_MODEL") || getEnvValue("HUGGINGFACE_MODEL") || "Qwen/Qwen2.5-7B-Instruct",
+  hf_image_model: getEnvValue("HF_IMAGE_MODEL") || "black-forest-labs/FLUX.1-dev",
+};
+
+const hfApiKeyPlaceholder = getEnvValue("HUGGINGFACE_API_KEY") ? "••••••••" : "not configured";
+
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const { data: settings, isLoading } = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
   const [form, setForm] = useState({
-    facebook_app_id: "",
-    facebook_page_id: "",
-    facebook_page_access_token: "",
+    facebook_app_id: aiEnvDefaults.facebook_app_id || "",
+    facebook_page_id: aiEnvDefaults.facebook_page_id || "",
+    facebook_page_access_token: aiEnvDefaults.facebook_page_access_token || "",
     facebook_image_url: "",
     facebook_image_title: "",
     facebook_image_description: "",
     facebook_image_message: "Test Facebook image post",
     auto_post_enabled: false,
     max_posts_per_day: 3,
-    groq_model: "llama-3.1-8b-instant",
-    hf_model: "Qwen/Qwen2.5-7B-Instruct",
-    hf_image_model: "black-forest-labs/FLUX.1-dev",
+    groq_model: aiEnvDefaults.groq_model,
+    hf_model: aiEnvDefaults.hf_model,
+    hf_image_model: aiEnvDefaults.hf_image_model,
   });
   const [testingAI, setTestingAI] = useState({
     groq: false,
@@ -58,18 +72,18 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings) {
       setForm({
-        facebook_app_id: settings.facebook_app_id || "",
-        facebook_page_id: settings.facebook_page_id || "",
-        facebook_page_access_token: settings.facebook_page_access_token ?? "",
+        facebook_app_id: settings.facebook_app_id || aiEnvDefaults.facebook_app_id || "",
+        facebook_page_id: settings.facebook_page_id || aiEnvDefaults.facebook_page_id || "",
+        facebook_page_access_token: settings.facebook_page_access_token ?? aiEnvDefaults.facebook_page_access_token ?? "",
         facebook_image_url: settings.facebook_image_url || "",
         facebook_image_title: settings.facebook_image_title || "",
         facebook_image_description: settings.facebook_image_description || "",
         facebook_image_message: settings.facebook_image_message || "Test Facebook image post",
         auto_post_enabled: settings.auto_post_enabled ?? false,
         max_posts_per_day: settings.max_posts_per_day ?? 3,
-        groq_model: settings.groq_model || "llama-3.1-8b-instant",
-        hf_model: settings.hf_model || "Qwen/Qwen2.5-7B-Instruct",
-        hf_image_model: settings.hf_image_model || "black-forest-labs/FLUX.1-dev",
+        groq_model: settings.groq_model || aiEnvDefaults.groq_model,
+        hf_model: settings.hf_model || aiEnvDefaults.hf_model,
+        hf_image_model: settings.hf_image_model || aiEnvDefaults.hf_image_model,
       });
     }
   }, [settings]);
@@ -455,6 +469,21 @@ export default function SettingsPage() {
                   onChange={(e) => setForm({ ...form, hf_image_model: e.target.value })}
                   placeholder="black-forest-labs/FLUX.1-dev"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="hf_api_key">Hugging Face API Key</Label>
+                <Input
+                  id="hf_api_key"
+                  type="password"
+                  value={hfApiKeyPlaceholder}
+                  readOnly
+                  disabled
+                  placeholder="Set HUGGINGFACE_API_KEY in deployment settings"
+                />
+                <p className="text-xs text-muted-foreground">
+                  The Hugging Face token is read from the deployment environment and is never exposed in the UI.
+                </p>
               </div>
             </div>
 
