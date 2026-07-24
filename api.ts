@@ -384,6 +384,14 @@ async function handlePagesList(req: Request): Promise<Response> {
     // Call Meta Graph API v25.0
     const graphUrl = `https://graph.facebook.com/v25.0/me/accounts?access_token=${encodeURIComponent(token)}`;
     const res = await fetch(graphUrl);
+    let data: any;
+    try {
+        data = await res.json();
+    } catch (e) {
+        // Handle cases where the response is not valid JSON
+        data = { error: `Failed to parse JSON response: ${e instanceof Error ? e.message : String(e)}` };
+    }
+
     if (!res.ok) {
       console.warn(`Meta Graph API returned status ${res.status}. Error:`, data.error);
       
@@ -399,7 +407,7 @@ async function handlePagesList(req: Request): Promise<Response> {
       });
     }
 
-    const pages = data.data.map((p: any) => ({
+    if (!data || !Array.isArray(data.data) || data.data.length === 0) {
       id: p.id,
       name: p.name,
       access_token: p.access_token
