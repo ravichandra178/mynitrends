@@ -385,15 +385,16 @@ async function handlePagesList(req: Request): Promise<Response> {
     const graphUrl = `https://graph.facebook.com/v25.0/me/accounts?access_token=${encodeURIComponent(token)}`;
     const res = await fetch(graphUrl);
     if (!res.ok) {
-      console.warn(`Meta Graph API returned status ${res.status}`);
-      return new Response(JSON.stringify(fallback), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const data = await res.json();
-    if (!data || !Array.isArray(data.data) || data.data.length === 0) {
-      return new Response(JSON.stringify(fallback), {
+      console.warn(`Meta Graph API returned status ${res.status}. Error:`, data.error);
+      
+      let errorMessage = data.error?.message || `HTTP ${res.status}`;
+      
+      // Check for common permission errors related to page listing
+      if (errorMessage.includes("permission") || errorMessage.includes("pages_show_list")) {
+        errorMessage = `Permission Error: The access token lacks the required 'pages_show_list' permission. Please ensure the token has been granted the necessary permissions via App Review. Details: ${errorMessage}`;
+      }
+      
+      return new Response(JSON.stringify({ error: errorMessage, fallback: fallback }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -408,8 +409,8 @@ async function handlePagesList(req: Request): Promise<Response> {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("GET /api/pages error, falling back:", e);
-    return new Response(JSON.stringify(fallback), {
+    console.error("GET /api/pages error:", e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
