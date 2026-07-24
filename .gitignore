@@ -24,3 +24,4 @@ dist-ssr
 *.sw?
 .env*
 setup_script.sh
+.aider*
