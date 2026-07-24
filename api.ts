@@ -343,6 +343,78 @@ async function handleTestConnection(req: Request): Promise<Response> {
   }
 }
 
+async function handlePagesList(req: Request): Promise<Response> {
+  if (req.method !== "GET") return new Response("Method not allowed", { status: 405 });
+
+  const fallback = [
+    {
+      id: Deno.env.get("VITE_FACEBOOK_PAGE_ID") || Deno.env.get("PAGE_ID") || "",
+      name: "Default Facebook Page",
+      access_token: Deno.env.get("VITE_FACEBOOK_PAGE_ACCESS_TOKEN") || Deno.env.get("PAGE_ACCESS_TOKEN") || ""
+    }
+  ];
+
+  try {
+    // Read the user's access token from Authorization header or query parameter or custom header
+    let token = "";
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader) {
+      if (authHeader.startsWith("Bearer ")) {
+        token = authHeader.substring(7);
+      } else {
+        token = authHeader;
+      }
+    }
+    
+    if (!token) {
+      const url = new URL(req.url);
+      token = url.searchParams.get("access_token") || "";
+    }
+
+    if (!token) {
+      token = req.headers.get("x-facebook-user-token") || "";
+    }
+
+    if (!token) {
+      return new Response(JSON.stringify(fallback), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Call Meta Graph API v25.0
+    const graphUrl = `https://graph.facebook.com/v25.0/me/accounts?access_token=${encodeURIComponent(token)}`;
+    const res = await fetch(graphUrl);
+    if (!res.ok) {
+      console.warn(`Meta Graph API returned status ${res.status}`);
+      return new Response(JSON.stringify(fallback), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const data = await res.json();
+    if (!data || !Array.isArray(data.data) || data.data.length === 0) {
+      return new Response(JSON.stringify(fallback), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const pages = data.data.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      access_token: p.access_token
+    }));
+
+    return new Response(JSON.stringify(pages), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("GET /api/pages error, falling back:", e);
+    return new Response(JSON.stringify(fallback), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+}
+
 // Helper to determine the deployment base URL for internal function calls
 function getDeploymentUrl(req?: Request): string {
   let urlStr = Deno.env.get("DENO_DEPLOYMENT_URL") || "";
@@ -406,6 +478,7 @@ serve(async (req) => {
   if (path === "/api/post-to-facebook") return handlePostToFacebook(req);
   if (path === "/api/fetch-engagement") return handleFetchEngagement(req);
   if (path === "/api/test-connection") return handleTestConnection(req);
+  if (path === "/api/pages" && req.method === "GET") return handlePagesList(req);
 
   // Serve static files for SPA
   if (path === "/" || path === "/index.html") {
