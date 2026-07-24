@@ -478,7 +478,7 @@ serve(async (req) => {
   if (path === "/api/generate-trends") return handleGenerateTrends(req);
   if (path === "/api/post-to-facebook") return handlePostToFacebook(req);
   if (path === "/api/fetch-engagement") return handleFetchEngagement(req);
-  if (path === "/api/test-connection") return handleTestConnection(req);
+  if (path === "/api/test-connection" && req.method === "POST") return handleTestConnection(req);
   if (path === "/api/pages" && req.method === "GET") return handlePagesList(req);
 
   // Serve static files for SPA
