@@ -424,6 +424,69 @@ async function handlePagesList(req: Request): Promise<Response> {
   }
 }
 
+async function handleSelectPage(req: Request): Promise<Response> {
+  if (req.method !== "POST") return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+  
+  try {
+    const { pageId, accessToken } = await req.json();
+    if (!pageId || !accessToken) {
+      return new Response(JSON.stringify({ error: "Missing pageId or accessToken" }), { status: 400, headers: corsHeaders });
+    }
+
+    const client = await getConnection();
+    
+    // Update settings with the newly selected page credentials
+    const updatePayload = {
+      facebook_page_id: pageId,
+      facebook_page_access_token: accessToken,
+    };
+
+    // We use the existing handleSettingsUpdate logic structure, but call it directly for simplicity
+    // Note: In a real scenario, we might call handleSettingsUpdate(req) but since we are in the handler, 
+    // we replicate the core logic of updating settings.
+    
+    let query = "UPDATE settings SET ";
+    const values: any[] = [];
+    let paramCount = 1;
+
+    for (const key in updatePayload) {
+      if (key !== 'facebook_page_id' && key !== 'facebook_page_access_token') {
+        if (paramCount > 1) query += ", ";
+        query += `${key} = $${paramCount}`;
+        values.push(updatePayload[key]);
+        paramCount++;
+      }
+    }
+    
+    // Handle the two specific fields separately to ensure correct parameter counting
+    if (paramCount > 1) query += ", ";
+    query += `facebook_page_id = $${paramCount}`;
+    values.push(updatePayload.facebook_page_id);
+    paramCount++;
+    
+    if (paramCount > 1) query += ", ";
+    query += `facebook_page_access_token = $${paramCount}`;
+    values.push(updatePayload.facebook_page_access_token);
+
+    query += " WHERE id = (SELECT id FROM settings LIMIT 1) RETURNING *";
+
+    const result = await client.queryObject(query, values);
+    client.release();
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: "Default Facebook Page updated successfully", 
+      pageId: result.rows[0]?.facebook_page_id,
+      accessTokenUpdated: true
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("POST /api/select-page error:", e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers: corsHeaders });
+  }
+}
+
 // Helper to determine the deployment base URL for internal function calls
 function getDeploymentUrl(req?: Request): string {
   let urlStr = Deno.env.get("DENO_DEPLOYMENT_URL") || "";
