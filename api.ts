@@ -8,12 +8,26 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
 };
 
-// Initialize database pool
-const pool = new Pool(Deno.env.get("DATABASE_URL")!, {
-  max: 3,
-});
+// Initialize database pool lazily
+let pool: Pool | null = null;
 
 async function getConnection() {
+  if (!pool) {
+    let dbUrl = Deno.env.get("DATABASE_URL") || "";
+    if (dbUrl && dbUrl.includes("postgresql://")) {
+      const hasDatabase = /\/[a-zA-Z0-9_-]+(\?|$)/.test(dbUrl);
+      if (!hasDatabase) {
+        if (dbUrl.includes("?")) {
+          dbUrl = dbUrl.replace("?", "/postgres?");
+        } else {
+          dbUrl = dbUrl + "/postgres";
+        }
+      }
+    }
+    pool = new Pool(dbUrl, {
+      max: 3,
+    });
+  }
   return pool.connect();
 }
 
