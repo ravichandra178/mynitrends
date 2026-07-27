@@ -542,71 +542,42 @@ function getDeploymentUrl(req?: Request): string {
   return urlStr.replace(/\/+$/, "");
 }
 
-serve(async (req) => {
-  const url = new URL(req.url);
-  const path = url.pathname;
+if (import.meta.main) {
+  serve(async (req) => {
+    const url = new URL(req.url);
+    const path = url.pathname;
 
-  // Handle CORS preflight
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  // Route to appropriate handler
-  if (path === "/api/trends" && req.method === "GET") return handleTrendsList(req);
-  if (path === "/api/trends" && req.method === "POST") return handleTrendsCreate(req);
-  if (path === "/api/posts" && req.method === "GET") return handlePostsList(req);
-  if (path.startsWith("/api/posts/") && req.method === "DELETE") {
-    const postId = path.split("/")[3];
-    return handlePostDelete(req, postId);
-  }
-  if (path.startsWith("/api/posts/") && req.method === "PATCH") {
-    const postId = path.split("/")[3];
-    return handlePostUpdate(req, postId);
-  }
-  if (path === "/api/settings" && req.method === "GET") return handleSettingsGet(req);
-  if (path === "/api/settings" && req.method === "PATCH") return handleSettingsUpdate(req);
-  if (path === "/api/generate-post") return handleGeneratePost(req);
-  if (path === "/api/generate-trends") return handleGenerateTrends(req);
-  if (path === "/api/post-to-facebook") return handlePostToFacebook(req);
-  if (path === "/api/fetch-engagement") return handleFetchEngagement(req);
-  if (path === "/api/test-connection" && req.method === "POST") return handleTestConnection(req);
-  if (path === "/api/pages" && req.method === "GET") return handlePagesList(req);
-
-  // Serve static files for SPA
-  if (path === "/" || path === "/index.html") {
-    const staticPath = "./dist/index.html";
-    try {
-      const content = await Deno.readFile(staticPath);
-      return new Response(content, {
-        headers: { "Content-Type": "text/html", ...corsHeaders },
-      });
-    } catch {
-      return new Response("Not found", { status: 404, headers: corsHeaders });
+    // Handle CORS preflight
+    if (req.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
     }
-  }
 
-  // Serve other static files
-  if (!path.startsWith("/api/")) {
-    const staticPath = `./dist${path}`;
-    try {
-      const content = await Deno.readFile(staticPath);
-      const ext = path.split(".").pop();
-      const contentTypes: Record<string, string> = {
-        js: "application/javascript",
-        css: "text/css",
-        json: "application/json",
-        png: "image/png",
-        jpg: "image/jpeg",
-        svg: "image/svg+xml",
-      };
-      const contentType = contentTypes[ext] || "application/octet-stream";
-      return new Response(content, {
-        headers: { "Content-Type": contentType, ...corsHeaders },
-      });
-    } catch {
-      // Fall back to SPA index.html for client-side routing
+    // Route to appropriate handler
+    if (path === "/api/trends" && req.method === "GET") return handleTrendsList(req);
+    if (path === "/api/trends" && req.method === "POST") return handleTrendsCreate(req);
+    if (path === "/api/posts" && req.method === "GET") return handlePostsList(req);
+    if (path.startsWith("/api/posts/") && req.method === "DELETE") {
+      const postId = path.split("/")[3];
+      return handlePostDelete(req, postId);
+    }
+    if (path.startsWith("/api/posts/") && req.method === "PATCH") {
+      const postId = path.split("/")[3];
+      return handlePostUpdate(req, postId);
+    }
+    if (path === "/api/settings" && req.method === "GET") return handleSettingsGet(req);
+    if (path === "/api/settings" && req.method === "PATCH") return handleSettingsUpdate(req);
+    if (path === "/api/generate-post") return handleGeneratePost(req);
+    if (path === "/api/generate-trends") return handleGenerateTrends(req);
+    if (path === "/api/post-to-facebook") return handlePostToFacebook(req);
+    if (path === "/api/fetch-engagement") return handleFetchEngagement(req);
+    if (path === "/api/test-connection" && req.method === "POST") return handleTestConnection(req);
+    if (path === "/api/pages" && req.method === "GET") return handlePagesList(req);
+
+    // Serve static files for SPA
+    if (path === "/" || path === "/index.html") {
+      const staticPath = "./dist/index.html";
       try {
-        const content = await Deno.readFile("./dist/index.html");
+        const content = await Deno.readFile(staticPath);
         return new Response(content, {
           headers: { "Content-Type": "text/html", ...corsHeaders },
         });
@@ -614,7 +585,38 @@ serve(async (req) => {
         return new Response("Not found", { status: 404, headers: corsHeaders });
       }
     }
-  }
 
-  return new Response("Not found", { status: 404, headers: corsHeaders });
-});
+    // Serve other static files
+    if (!path.startsWith("/api/")) {
+      const staticPath = `./dist${path}`;
+      try {
+        const content = await Deno.readFile(staticPath);
+        const ext = path.split(".").pop();
+        const contentTypes: Record<string, string> = {
+          js: "application/javascript",
+          css: "text/css",
+          json: "application/json",
+          png: "image/png",
+          jpg: "image/jpeg",
+          svg: "image/svg+xml",
+        };
+        const contentType = contentTypes[ext] || "application/octet-stream";
+        return new Response(content, {
+          headers: { "Content-Type": contentType, ...corsHeaders },
+        });
+      } catch {
+        // Fall back to SPA index.html for client-side routing
+        try {
+          const content = await Deno.readFile("./dist/index.html");
+          return new Response(content, {
+            headers: { "Content-Type": "text/html", ...corsHeaders },
+          });
+        } catch {
+          return new Response("Not found", { status: 404, headers: corsHeaders });
+        }
+      }
+    }
+
+    return new Response("Not found", { status: 404, headers: corsHeaders });
+  });
+}
