@@ -6,6 +6,7 @@ import { generatePost } from "./functions/generate-post.ts";
 import { generateTrends } from "./functions/generate-trends.ts";
 import { generateAutoreply } from "./functions/generate-autoreply.ts";
 import { getReplyTargetId } from "./src/lib/facebook-thread-utils.ts";
+import { handlePagesList } from "./api.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1659,6 +1660,10 @@ Deno.serve(async (req) => {
     if (path === "/api/trends" && method === "POST") {
       console.log("Matched POST /api/trends");
       return await handleTrendsCreate(req);
+    }
+    if ((path === "/api/pages" || path === "/pages") && method === "GET") {
+      console.log(`Matched GET ${path}`);
+      return await handlePagesList(req);
     }
     if (path === "/api/ai-reply") return await handleAiReply(req);
     if (path === "/api/posts" && method === "GET") return await handlePostsList(req);

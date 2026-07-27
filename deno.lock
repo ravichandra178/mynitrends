@@ -3835,7 +3835,9 @@
     }
   },
   "redirects": {
-    "https://esm.sh/@huggingface/inference": "https://esm.sh/@huggingface/inference@4.13.23"
+    "https://esm.sh/@huggingface/inference": "https://esm.sh/@huggingface/inference@4.13.23",
+    "https://esm.sh/@huggingface/jinja@^0.5.9?target=denonext": "https://esm.sh/@huggingface/jinja@0.5.9?target=denonext",
+    "https://esm.sh/@huggingface/tasks@^0.21.25?target=denonext": "https://esm.sh/@huggingface/tasks@0.21.28?target=denonext"
   },
   "remote": {
     "https://deno.land/std@0.160.0/_util/assert.ts": "e94f2eb37cebd7f199952e242c77654e43333c1ac4c5c700e929ea3aa5489f74",
@@ -3914,7 +3916,12 @@
     "https://deno.land/x/postgres@v0.17.0/query/types.ts": "a6dc8024867fe7ccb0ba4b4fa403ee5d474c7742174128c8e689c3b5e5eaa933",
     "https://deno.land/x/postgres@v0.17.0/utils/deferred.ts": "dd94f2a57355355c47812b061a51b55263f72d24e9cb3fdb474c7519f4d61083",
     "https://deno.land/x/postgres@v0.17.0/utils/utils.ts": "19c3527ddd5c6c4c49ae36397120274c7f41f9d3cbf479cb36065d23329e9f90",
-    "https://esm.sh/@huggingface/inference@4.13.23": "15afbcef5d2f58a8df53b21cff9159290a7a9317299ef1a5542634b4742809cb"
+    "https://esm.sh/@huggingface/inference@4.13.23": "15afbcef5d2f58a8df53b21cff9159290a7a9317299ef1a5542634b4742809cb",
+    "https://esm.sh/@huggingface/inference@4.13.23/denonext/inference.mjs": "2e87d4b87bd63a70849c9dbf31448a423416c10383d2a233810db0e1eb62ced0",
+    "https://esm.sh/@huggingface/jinja@0.5.9/denonext/jinja.mjs": "5e6e7f03d2a82d53ed351870091f45d0451b776870c35af656a35f358d0b291e",
+    "https://esm.sh/@huggingface/jinja@0.5.9?target=denonext": "8bfab0d3de47787995d09601e4b8e6ac2dea3774ee98cf33e4f6df7d936d7bde",
+    "https://esm.sh/@huggingface/tasks@0.21.28/denonext/tasks.mjs": "a6eb70bb8a511db49b35cf403a57516597f0f31f543e783ea14d9cf8dd4b046d",
+    "https://esm.sh/@huggingface/tasks@0.21.28?target=denonext": "23b0998dd05088c612097baaaca69f1e9ce432f7c511c4e252d1138697cb66ba"
   },
   "workspace": {
     "packageJson": {

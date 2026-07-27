@@ -343,7 +343,7 @@ async function handleTestConnection(req: Request): Promise<Response> {
   }
 }
 
-async function handlePagesList(req: Request): Promise<Response> {
+export async function handlePagesList(req: Request): Promise<Response> {
   if (req.method !== "GET") return new Response("Method not allowed", { status: 405 });
 
   const fallback = [
@@ -408,6 +408,12 @@ async function handlePagesList(req: Request): Promise<Response> {
     }
 
     if (!data || !Array.isArray(data.data) || data.data.length === 0) {
+      return new Response(JSON.stringify(fallback), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const pages = data.data.map((p: any) => ({
       id: p.id,
       name: p.name,
       access_token: p.access_token
