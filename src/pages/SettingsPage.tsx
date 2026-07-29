@@ -13,17 +13,10 @@ import { toast } from "sonner";
 const API_BASE = '';
 import { Loader2, CheckCircle, XCircle, ShieldCheck } from "lucide-react";
 
-// Read env vars once at module level for the status card (no user interaction needed)
+// Read env vars once at module level for the status card (boolean presence only — values never displayed)
 const _envMeta = (import.meta as any).env || {};
 const _fbPageIdFromEnv: string = (_envMeta.VITE_FACEBOOK_PAGE_ID || "").trim();
-const _fbTokenFromEnv: string = (_envMeta.VITE_FACEBOOK_PAGE_ACCESS_TOKEN || "").trim();
-
-/** Show first 4 chars + ... + last 4 chars of a token */
-function maskEnvToken(token: string): string {
-  if (!token) return "";
-  if (token.length <= 10) return "••••••••";
-  return `${token.slice(0, 4)}...${token.slice(-4)}`;
-}
+const _fbTokenFromEnv: boolean = !!(_envMeta.VITE_FACEBOOK_PAGE_ACCESS_TOKEN || "").trim();
 
 const envMeta = (import.meta as any).env || {};
 const getEnvValue = (key: string) => String(envMeta[key] || envMeta[`VITE_${key}`] || "").trim();
@@ -410,21 +403,14 @@ export default function SettingsPage() {
                   )}
                 </div>
               </div>
-              {/* VITE_FACEBOOK_PAGE_ACCESS_TOKEN */}
+              {/* VITE_FACEBOOK_PAGE_ACCESS_TOKEN — only show configured/missing, never the value */}
               <div className="flex items-center justify-between rounded border px-3 py-2">
-                <div>
-                  <div className="text-xs font-mono text-muted-foreground">VITE_FACEBOOK_PAGE_ACCESS_TOKEN</div>
-                  {_fbTokenFromEnv ? (
-                    <div className="text-xs font-mono mt-0.5 text-foreground tracking-wider">
-                      {maskEnvToken(_fbTokenFromEnv)}
-                    </div>
-                  ) : null}
-                </div>
+                <div className="text-xs font-mono text-muted-foreground">VITE_FACEBOOK_PAGE_ACCESS_TOKEN</div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {_fbTokenFromEnv ? (
                     <>
                       <CheckCircle className="h-4 w-4 text-green-500" />
-                      <span className="text-xs text-green-600 font-medium">Loaded</span>
+                      <span className="text-xs text-green-600 font-medium">Configured</span>
                     </>
                   ) : (
                     <>

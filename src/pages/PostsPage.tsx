@@ -50,13 +50,14 @@ export default function PostsPage() {
     try {
       const env = (import.meta as any).env || {};
 
-      // Priority 1: credentials from the DB-linked/selected Facebook Page
-      // Priority 2: VITE_ environment variables (fallback)
-      const pageId = settings?.facebook_page_id || env.VITE_FACEBOOK_PAGE_ID || "";
-      const accessToken = settings?.facebook_page_access_token || env.VITE_FACEBOOK_PAGE_ACCESS_TOKEN || "";
+      // Priority 1: VITE_ env vars (always fresh from deployment build)
+      // Priority 2: DB-linked page credentials (may be stale/expired)
+      const pageId = env.VITE_FACEBOOK_PAGE_ID || settings?.facebook_page_id || "";
+      const accessToken = env.VITE_FACEBOOK_PAGE_ACCESS_TOKEN || settings?.facebook_page_access_token || "";
 
       console.log("[PostsPage] Post now:", postId, {
-        usingLinkedPage: !!settings?.facebook_page_id,
+        usingEnv: !!env.VITE_FACEBOOK_PAGE_ID,
+        usingLinkedPage: !env.VITE_FACEBOOK_PAGE_ID && !!settings?.facebook_page_id,
         pageId,
         hasToken: !!accessToken,
       });
@@ -105,13 +106,17 @@ export default function PostsPage() {
     try {
       const result = await syncPostEngagement(postId, fbPostId);
       queryClient.invalidateQueries({ queryKey: ["posts"] });
-      toast.success(`Engagement synced: ${result.likes ?? 0} likes, ${result.comments ?? 0} comments`);
+      // Surface the token source so the user can see if it's using env vars or a linked page
+      const sourceLabel = result.tokenSource ? ` · via ${result.tokenSource}` : "";
+      toast.success(`Synced: ${result.likes ?? 0} likes, ${result.comments ?? 0} comments${sourceLabel}`);
     } catch (e: any) {
+      // Show the full error including "Token expired (source: ...)" messages from the backend
       toast.error(e.message || "Failed to fetch engagement");
     } finally {
       setRefreshingId(null);
     }
   };
+
 
   const saveEdit = async (id: string) => {
     try {

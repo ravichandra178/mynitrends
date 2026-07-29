@@ -364,12 +364,31 @@ async function getSettingsFromDb() {
 }
 
 async function postToFacebookJob(postId: string): Promise<{ success: boolean; facebookPostId: string }> {
-  const settings = await getSettingsFromDb();
-  const facebookPageId = settings.facebook_page_id || settings.facebook_app_id || Deno.env.get("FACEBOOK_PAGE_ID") || "";
-  const facebookAccessToken = settings.facebook_page_access_token || Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") || "";
+  // Priority: Env variables (always fresh) -> DB settings (fallback)
+  const facebookPageId = 
+    Deno.env.get("FACEBOOK_PAGE_ID") || 
+    Deno.env.get("VITE_FACEBOOK_PAGE_ID") || 
+    (() => {
+      try {
+        // Since getSettingsFromDb is async, we try to resolve from DB as fallback but priority is given to env
+        return ""; // The scheduler function runs asynchronously and we need to check settings.
+      } catch { return ""; }
+    })() || "";
 
-  if (!facebookPageId || !facebookAccessToken) {
-    throw new Error("FACEBOOK_PAGE_ID and FACEBOOK_PAGE_ACCESS_TOKEN must be configured either in settings or environment");
+  // For async job, let's load DB settings just in case env variables are missing
+  let resolvedPageId = facebookPageId;
+  let resolvedAccessToken = Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") || Deno.env.get("VITE_FACEBOOK_PAGE_ACCESS_TOKEN") || "";
+
+  if (!resolvedPageId || !resolvedAccessToken) {
+    try {
+      const settings = await getSettingsFromDb();
+      if (!resolvedPageId) resolvedPageId = settings.facebook_page_id || settings.facebook_app_id || "";
+      if (!resolvedAccessToken) resolvedAccessToken = settings.facebook_page_access_token || "";
+    } catch { /* ignore */ }
+  }
+
+  if (!resolvedPageId || !resolvedAccessToken) {
+    throw new Error("Facebook credentials (page ID or access token) must be configured in environment or settings");
   }
 
   const client = await getConnection();
@@ -465,23 +484,40 @@ async function handlePostToFacebook(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: "Missing postId" }), { status: 400, headers: corsHeaders });
     }
 
-    // Priority: request body → DB settings → FACEBOOK_PAGE_ID env → VITE_FACEBOOK_PAGE_ID env
-    const dbSettings = (!requestedPageId || !requestedAccessToken) ? await getSettingsFromDb().catch(() => ({})) : {};
-    const facebookPageId =
-      requestedPageId ||
-      (dbSettings as any).facebook_page_id ||
-      Deno.env.get("FACEBOOK_PAGE_ID") ||
-      Deno.env.get("VITE_FACEBOOK_PAGE_ID") ||
-      "";
-    const facebookAccessToken =
-      requestedAccessToken ||
-      (dbSettings as any).facebook_page_access_token ||
-      Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") ||
-      Deno.env.get("VITE_FACEBOOK_PAGE_ACCESS_TOKEN") ||
-      "";
+    // Resolution order: request body → env vars (always fresh) → DB settings (may be stale)
+    // The working commit (6eb09581ea) used request body → env vars. DB settings is added as last resort.
+    let facebookPageId = "";
+    let facebookAccessToken = "";
+    let pageIdSource = "none";
+    let tokenSource = "none";
+
+    // 1. Request body (frontend sends these from import.meta.env or linked page)
+    if (requestedPageId) { facebookPageId = requestedPageId; pageIdSource = "request"; }
+    if (requestedAccessToken) { facebookAccessToken = requestedAccessToken; tokenSource = "request"; }
+
+    // 2. Env vars — always fresh from deployment
+    if (!facebookPageId) {
+      const envId = Deno.env.get("FACEBOOK_PAGE_ID") || Deno.env.get("VITE_FACEBOOK_PAGE_ID") || "";
+      if (envId) { facebookPageId = envId; pageIdSource = Deno.env.get("FACEBOOK_PAGE_ID") ? "env_FACEBOOK_PAGE_ID" : "env_VITE_FACEBOOK_PAGE_ID"; }
+    }
+    if (!facebookAccessToken) {
+      const envToken = Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") || Deno.env.get("VITE_FACEBOOK_PAGE_ACCESS_TOKEN") || "";
+      if (envToken) { facebookAccessToken = envToken; tokenSource = Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") ? "env_FACEBOOK_PAGE_ACCESS_TOKEN" : "env_VITE_FACEBOOK_PAGE_ACCESS_TOKEN"; }
+    }
+
+    // 3. DB settings — last resort (may contain stale/expired tokens)
+    if (!facebookPageId || !facebookAccessToken) {
+      try {
+        const dbSettings = await getSettingsFromDb();
+        if (!facebookPageId && dbSettings.facebook_page_id) { facebookPageId = dbSettings.facebook_page_id; pageIdSource = "db_settings"; }
+        if (!facebookAccessToken && dbSettings.facebook_page_access_token) { facebookAccessToken = dbSettings.facebook_page_access_token; tokenSource = "db_settings"; }
+      } catch { /* ignore DB errors */ }
+    }
+
+    console.log(`[post-to-facebook] pageId source: ${pageIdSource}, token source: ${tokenSource}, postId: ${postId}`);
 
     if (!facebookPageId || !facebookAccessToken) {
-      return new Response(JSON.stringify({ error: "Missing Facebook page ID or access token" }), { status: 400, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: `Missing Facebook credentials. pageId source: ${pageIdSource}, token source: ${tokenSource}` }), { status: 400, headers: corsHeaders });
     }
 
     const client = await getConnection();
@@ -580,9 +616,29 @@ async function handleFetchEngagement(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: "Missing postId or facebookPostId" }), { status: 400, headers: corsHeaders });
     }
 
-    const deploymentUrl = getDeploymentUrl(req);
-    const settings = await getSettingsFromDb();
-    const accessToken = settings.facebook_page_access_token || Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") || Deno.env.get("VITE_FACEBOOK_PAGE_ACCESS_TOKEN") || "";
+    // Resolve access token: env vars first (always fresh) → DB settings last (may be stale)
+    let accessToken = "";
+    let tokenSource = "none";
+
+    // 1. Env vars — always fresh from deployment
+    const envToken = Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") || Deno.env.get("VITE_FACEBOOK_PAGE_ACCESS_TOKEN") || "";
+    if (envToken) {
+      accessToken = envToken;
+      tokenSource = Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") ? "env_FACEBOOK_PAGE_ACCESS_TOKEN" : "env_VITE_FACEBOOK_PAGE_ACCESS_TOKEN";
+    }
+
+    // 2. DB settings — last resort (may contain stale/expired tokens)
+    if (!accessToken) {
+      try {
+        const settings = await getSettingsFromDb();
+        if (settings.facebook_page_access_token) {
+          accessToken = settings.facebook_page_access_token;
+          tokenSource = "db_settings";
+        }
+      } catch { /* ignore */ }
+    }
+
+    console.log(`[fetch-engagement] token source: ${tokenSource}, facebookPostId: ${facebookPostId}`);
 
     if (!accessToken) {
       return new Response(JSON.stringify({ error: "Facebook access token not configured" }), {
@@ -591,96 +647,51 @@ async function handleFetchEngagement(req: Request): Promise<Response> {
       });
     }
 
-    try {
-      // Use reactions (superset of likes) for v20+ reliability.
-      // Also request the post_id in case the stored ID is a photo ID.
-      const graphUrl =
-        `https://graph.facebook.com/v20.0/${facebookPostId}` +
-        `?fields=reactions.summary(true),comments.summary(true),likes.summary(true)` +
-        `&access_token=${encodeURIComponent(accessToken)}`;
+    // Query the individual post directly — same field pattern as the confirmed-working curl:
+    // GET /v25.0/{post_id}?fields=likes.summary(true),comments.summary(true)&access_token=...
+    const graphUrl =
+      `https://graph.facebook.com/v25.0/${facebookPostId}` +
+      `?fields=id,likes.summary(true),comments.summary(true)` +
+      `&access_token=${encodeURIComponent(accessToken)}`;
 
-      const fbRes = await fetch(graphUrl);
-      const fbData = await fbRes.json();
+    console.log(`[fetch-engagement] Querying Graph API v25.0 for post: ${facebookPostId}`);
+    const fbRes = await fetch(graphUrl);
+    const fbData = await fbRes.json();
 
-      if (!fbRes.ok || fbData.error) {
-        // If the stored ID is a photo ID (no underscore), try fetching the attached post
-        const isPhotoId = !String(facebookPostId).includes("_");
-        if (isPhotoId) {
-          // Fetch the photo object to get its attached post_id
-          const photoRes = await fetch(
-            `https://graph.facebook.com/v20.0/${facebookPostId}?fields=link&access_token=${encodeURIComponent(accessToken)}`
-          );
-          const photoData = await photoRes.json();
-          if (photoData.link) {
-            // Extract post id from the link (format: /posts/<id>)
-            const match = photoData.link.match(/\/posts\/([^/?]+)/);
-            if (match) {
-              const actualPostId = `${facebookPostId.split("_")[0]}_${match[1]}`;
-              const retryRes = await fetch(
-                `https://graph.facebook.com/v20.0/${actualPostId}?fields=reactions.summary(true),comments.summary(true)&access_token=${encodeURIComponent(accessToken)}`
-              );
-              const retryData = await retryRes.json();
-              if (retryRes.ok && !retryData.error) {
-                const likes = retryData.reactions?.summary?.total_count ?? 0;
-                const comments = retryData.comments?.summary?.total_count ?? 0;
-                const client = await getConnection();
-                try {
-                  await client.queryObject(
-                    "UPDATE posts SET engagement_likes = $1, engagement_comments = $2 WHERE id = $3",
-                    [likes, comments, postId]
-                  );
-                } finally {
-                  await client.end();
-                }
-                return new Response(JSON.stringify({ success: true, likes, comments }), {
-                  headers: { ...corsHeaders, "Content-Type": "application/json" },
-                });
-              }
-            }
-          }
-        }
-        throw new Error(fbData.error?.message || "Failed to fetch Facebook engagement");
-      }
-
-      // reactions is the superset; fall back to likes if reactions not available
-      const likes =
-        fbData.reactions?.summary?.total_count ??
-        fbData.likes?.summary?.total_count ??
-        0;
-      const comments = fbData.comments?.summary?.total_count ?? 0;
-
-      const client = await getConnection();
-      try {
-        await client.queryObject(
-          "UPDATE posts SET engagement_likes = $1, engagement_comments = $2 WHERE id = $3",
-          [likes, comments, postId]
-        );
-      } finally {
-        await client.end();
-      }
-
-      return new Response(JSON.stringify({ success: true, likes, comments }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    } catch (directError) {
-      // Fallback to the deployed Supabase function if the direct Graph call fails.
-      try {
-        const funcRes = await fetch(`${deploymentUrl}/functions/v1/fetch-engagement`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ postId, facebookPostId }),
-        });
-
-        if (!funcRes.ok) throw new Error("Failed to fetch engagement");
-        const data = await funcRes.json();
-
-        return new Response(JSON.stringify(data), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      } catch (_fallbackError) {
-        throw directError;
-      }
+    if (!fbRes.ok || fbData.error) {
+      const errMsg = fbData.error?.message || `Graph API error (HTTP ${fbRes.status})`;
+      console.error(`[fetch-engagement] Graph API error (token source: ${tokenSource}):`, errMsg);
+      // Surface the expired-token error clearly so it shows in the UI
+      const isExpired = errMsg.includes("Session has expired") || errMsg.includes("expired");
+      return new Response(
+        JSON.stringify({
+          error: isExpired
+            ? `Token expired (source: ${tokenSource}). Please update your Facebook Page Access Token in Settings.`
+            : errMsg,
+          tokenSource,
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
+
+    const likes = fbData.likes?.summary?.total_count ?? 0;
+    const comments = fbData.comments?.summary?.total_count ?? 0;
+
+    console.log(`[fetch-engagement] ✅ likes: ${likes}, comments: ${comments}, source: ${tokenSource}`);
+
+    const client = await getConnection();
+    try {
+      await client.queryObject(
+        "UPDATE posts SET engagement_likes = $1, engagement_comments = $2 WHERE id = $3",
+        [likes, comments, postId]
+      );
+    } finally {
+      await client.end();
+    }
+
+    return new Response(JSON.stringify({ success: true, likes, comments, tokenSource }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (e) {
     console.error("POST /api/fetch-engagement error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers: corsHeaders });
@@ -688,6 +699,7 @@ async function handleFetchEngagement(req: Request): Promise<Response> {
 }
 
 async function handleGenerateAutoreply(req: Request): Promise<Response> {
+
   try {
     const { postId, comment } = await req.json();
     if (!postId || !comment) {
