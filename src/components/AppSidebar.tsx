@@ -1,13 +1,15 @@
-import { TrendingUp, FileText, Settings, ClipboardCheck } from "lucide-react";
+import { TrendingUp, FileText, Settings, ClipboardCheck, LayoutList } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 
 const navItems = [
   { title: "Trends", url: "/trends", icon: TrendingUp },
   { title: "Posts", url: "/posts", icon: FileText },
+  { title: "Pages", url: "/facebook-pages", icon: LayoutList },
   { title: "Settings", url: "/settings", icon: Settings },
   { title: "Review", url: "/review", icon: ClipboardCheck },
 ];
+
 
 export function AppSidebar() {
   const location = useLocation();

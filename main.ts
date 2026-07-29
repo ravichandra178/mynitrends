@@ -465,8 +465,20 @@ async function handlePostToFacebook(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: "Missing postId" }), { status: 400, headers: corsHeaders });
     }
 
-    const facebookPageId = requestedPageId || Deno.env.get("FACEBOOK_PAGE_ID")!;
-    const facebookAccessToken = requestedAccessToken || Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN")!;
+    // Priority: request body → DB settings → FACEBOOK_PAGE_ID env → VITE_FACEBOOK_PAGE_ID env
+    const dbSettings = (!requestedPageId || !requestedAccessToken) ? await getSettingsFromDb().catch(() => ({})) : {};
+    const facebookPageId =
+      requestedPageId ||
+      (dbSettings as any).facebook_page_id ||
+      Deno.env.get("FACEBOOK_PAGE_ID") ||
+      Deno.env.get("VITE_FACEBOOK_PAGE_ID") ||
+      "";
+    const facebookAccessToken =
+      requestedAccessToken ||
+      (dbSettings as any).facebook_page_access_token ||
+      Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") ||
+      Deno.env.get("VITE_FACEBOOK_PAGE_ACCESS_TOKEN") ||
+      "";
 
     if (!facebookPageId || !facebookAccessToken) {
       return new Response(JSON.stringify({ error: "Missing Facebook page ID or access token" }), { status: 400, headers: corsHeaders });
@@ -580,21 +592,69 @@ async function handleFetchEngagement(req: Request): Promise<Response> {
     }
 
     try {
-      const fbRes = await fetch(
-        `https://graph.facebook.com/v20.0/${facebookPostId}?fields=likes.summary(true),comments.summary(true)&access_token=${encodeURIComponent(accessToken)}`
-      );
+      // Use reactions (superset of likes) for v20+ reliability.
+      // Also request the post_id in case the stored ID is a photo ID.
+      const graphUrl =
+        `https://graph.facebook.com/v20.0/${facebookPostId}` +
+        `?fields=reactions.summary(true),comments.summary(true),likes.summary(true)` +
+        `&access_token=${encodeURIComponent(accessToken)}`;
+
+      const fbRes = await fetch(graphUrl);
       const fbData = await fbRes.json();
 
       if (!fbRes.ok || fbData.error) {
+        // If the stored ID is a photo ID (no underscore), try fetching the attached post
+        const isPhotoId = !String(facebookPostId).includes("_");
+        if (isPhotoId) {
+          // Fetch the photo object to get its attached post_id
+          const photoRes = await fetch(
+            `https://graph.facebook.com/v20.0/${facebookPostId}?fields=link&access_token=${encodeURIComponent(accessToken)}`
+          );
+          const photoData = await photoRes.json();
+          if (photoData.link) {
+            // Extract post id from the link (format: /posts/<id>)
+            const match = photoData.link.match(/\/posts\/([^/?]+)/);
+            if (match) {
+              const actualPostId = `${facebookPostId.split("_")[0]}_${match[1]}`;
+              const retryRes = await fetch(
+                `https://graph.facebook.com/v20.0/${actualPostId}?fields=reactions.summary(true),comments.summary(true)&access_token=${encodeURIComponent(accessToken)}`
+              );
+              const retryData = await retryRes.json();
+              if (retryRes.ok && !retryData.error) {
+                const likes = retryData.reactions?.summary?.total_count ?? 0;
+                const comments = retryData.comments?.summary?.total_count ?? 0;
+                const client = await getConnection();
+                try {
+                  await client.queryObject(
+                    "UPDATE posts SET engagement_likes = $1, engagement_comments = $2 WHERE id = $3",
+                    [likes, comments, postId]
+                  );
+                } finally {
+                  await client.end();
+                }
+                return new Response(JSON.stringify({ success: true, likes, comments }), {
+                  headers: { ...corsHeaders, "Content-Type": "application/json" },
+                });
+              }
+            }
+          }
+        }
         throw new Error(fbData.error?.message || "Failed to fetch Facebook engagement");
       }
 
-      const likes = fbData.likes?.summary?.total_count ?? 0;
+      // reactions is the superset; fall back to likes if reactions not available
+      const likes =
+        fbData.reactions?.summary?.total_count ??
+        fbData.likes?.summary?.total_count ??
+        0;
       const comments = fbData.comments?.summary?.total_count ?? 0;
 
       const client = await getConnection();
       try {
-        await client.queryObject("UPDATE posts SET engagement_likes = $1, engagement_comments = $2 WHERE id = $3", [likes, comments, postId]);
+        await client.queryObject(
+          "UPDATE posts SET engagement_likes = $1, engagement_comments = $2 WHERE id = $3",
+          [likes, comments, postId]
+        );
       } finally {
         await client.end();
       }

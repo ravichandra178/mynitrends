@@ -9,6 +9,7 @@ import PrivacyPage from "./pages/PrivacyPage";
 import TermsPage from "./pages/TermsPage";
 import TrendsPage from "./pages/TrendsPage";
 import PostsPage from "./pages/PostsPage";
+import FacebookPagesPage from "./pages/FacebookPagesPage";
 import SettingsPage from "./pages/SettingsPage";
 import ReviewPage from "./pages/ReviewPage";
 import NotFound from "./pages/NotFound";
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/dashboard" element={<Index />} />
           <Route path="/trends" element={<TrendsPage />} />
           <Route path="/posts" element={<PostsPage />} />
+          <Route path="/facebook-pages" element={<FacebookPagesPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/review" element={<ReviewPage />} />
           <Route path="*" element={<NotFound />} />

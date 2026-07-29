@@ -430,3 +430,59 @@ export async function testRSS() {
     throw new Error("Failed to test RSS");
   }
 }
+
+// ====================================
+// PAGES API
+// ====================================
+
+/**
+ * Fetch connected Facebook Pages from the backend.
+ * Without a userToken, the backend returns the env-variable fallback page.
+ * With a valid User Access Token, it calls Meta Graph API /me/accounts.
+ */
+export async function fetchPages(userToken?: string): Promise<any[]> {
+  console.log("[API] Fetching Facebook pages from /api/pages...");
+  try {
+    const headers: Record<string, string> = {};
+    if (userToken) {
+      headers["Authorization"] = `Bearer ${userToken}`;
+    }
+    const response = await fetch(`${API_BASE}/api/pages`, { headers });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    }
+    const data = await response.json();
+    console.log("[API] ✅ Pages fetched:", data);
+    // Backend may return array (success) or { error, fallback } (partial error)
+    if (Array.isArray(data)) return data;
+    if (data?.fallback) return data.fallback;
+    return [];
+  } catch (e) {
+    console.error("[API] ❌ Failed to fetch pages:", e);
+    throw new Error("Failed to fetch pages");
+  }
+}
+
+/**
+ * Persist the selected Facebook Page credentials to the settings table.
+ * This makes the chosen page the default for subsequent post-to-Facebook calls.
+ */
+export async function selectPage(pageId: string, accessToken: string): Promise<any> {
+  console.log("[API] Selecting Facebook page:", pageId);
+  try {
+    const response = await fetch(`${API_BASE}/api/select-page`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pageId, accessToken }),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    }
+    const data = await response.json();
+    console.log("[API] ✅ Page selected:", data);
+    return data;
+  } catch (e) {
+    console.error("[API] ❌ Failed to select page:", e);
+    throw new Error("Failed to select page");
+  }
+}

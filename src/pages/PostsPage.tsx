@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchPosts, deletePost, updatePostContent, updatePostSchedule, postToFacebook, updatePostImage, syncPostEngagement } from "@/lib/api-helpers";
+import { fetchPosts, deletePost, updatePostContent, updatePostSchedule, postToFacebook, updatePostImage, syncPostEngagement, fetchSettings } from "@/lib/api-helpers";
 import { toast } from "sonner";
 import { Send, Trash2, RefreshCw, Loader2, ThumbsUp, MessageSquare } from "lucide-react";
 import { format } from "date-fns";
@@ -28,6 +28,9 @@ export default function PostsPage() {
 
   const { data: posts = [], isLoading } = useQuery({ queryKey: ["posts"], queryFn: fetchPosts });
 
+  // Fetch settings to get the DB-linked Facebook Page credentials (set via /facebook-pages)
+  const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: fetchSettings });
+
   const deleteMutation = useMutation({
     mutationFn: deletePost,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["posts"] }); toast.success("Post deleted"); },
@@ -46,11 +49,20 @@ export default function PostsPage() {
     setPostingId(postId);
     try {
       const env = (import.meta as any).env || {};
-      const pageId = env.VITE_FACEBOOK_PAGE_ID || "";
-      const accessToken = env.VITE_FACEBOOK_PAGE_ACCESS_TOKEN || "";
+
+      // Priority 1: credentials from the DB-linked/selected Facebook Page
+      // Priority 2: VITE_ environment variables (fallback)
+      const pageId = settings?.facebook_page_id || env.VITE_FACEBOOK_PAGE_ID || "";
+      const accessToken = settings?.facebook_page_access_token || env.VITE_FACEBOOK_PAGE_ACCESS_TOKEN || "";
+
+      console.log("[PostsPage] Post now:", postId, {
+        usingLinkedPage: !!settings?.facebook_page_id,
+        pageId,
+        hasToken: !!accessToken,
+      });
 
       if (post.image_url && pageId && accessToken) {
-        // Try image post like settings UI
+        // Try image post
         try {
           const response = await fetch(`${API_BASE}/api/test-facebook-post`, {
             method: "POST",
@@ -67,7 +79,7 @@ export default function PostsPage() {
           const result = await response.json();
           if (!result.success) throw new Error(result.error || "Image post failed");
 
-          // onboard fallback: mark as posted in backend DB
+          // Mark as posted in backend DB
           await postToFacebook(postId, pageId, accessToken);
           toast.success("Published to Facebook with image!");
         } catch (imageErr) {
@@ -151,10 +163,28 @@ export default function PostsPage() {
   return (
     <Layout>
       <PageHeader title="Posts" description="Manage generated posts and publish to Facebook" />
-      <div className="flex items-center justify-between gap-2 mb-4">
-        <div className="text-sm text-muted-foreground">FB env pageId: {facebookEnv.pageId || "not set"}, token: {facebookEnv.accessToken ? "***" : "not set"}</div>
-        <Button size="sm" variant="ghost" onClick={loadFacebookEnv}>Load Facebook Env</Button>
+      {/* Credential source indicator */}
+      <div className="flex items-center justify-between gap-2 mb-4 rounded-lg border bg-card px-4 py-2.5">
+        {settings?.facebook_page_id ? (
+          <div className="flex items-center gap-2 text-sm">
+            <span className="inline-block w-2 h-2 rounded-full bg-green-500 shrink-0" />
+            <span className="text-foreground font-medium">Linked Page Active</span>
+            <span className="text-muted-foreground">·</span>
+            <span className="font-mono text-xs text-muted-foreground">{settings.facebook_page_id}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-sm">
+            <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${facebookEnv.pageId ? "bg-blue-400" : "bg-yellow-400"}`} />
+            <span className="text-muted-foreground">
+              {facebookEnv.pageId
+                ? <>Env fallback · <span className="font-mono text-xs">{facebookEnv.pageId}</span>, token: {facebookEnv.accessToken ? "✓ set" : "✗ missing"}</>
+                : "No page linked — click Load Env or go to Pages to select one"}
+            </span>
+          </div>
+        )}
+        <Button size="sm" variant="ghost" onClick={loadFacebookEnv}>Load Env</Button>
       </div>
+
       <div className="border rounded-lg overflow-hidden">
         <Table>
           <TableHeader>
