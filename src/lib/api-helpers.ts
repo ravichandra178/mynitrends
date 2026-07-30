@@ -166,15 +166,15 @@ export async function syncPostEngagement(postId: string, facebookPostId: string)
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ postId, facebookPostId }),
     });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-    }
     const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || `HTTP ${response.status}`);
+    }
     console.log("[API] ✅ Engagement synced:", data);
     return data;
-  } catch (e) {
+  } catch (e: any) {
     console.error("[API] ❌ Failed to sync engagement:", e);
-    throw new Error("Failed to sync engagement");
+    throw e;
   }
 }
 

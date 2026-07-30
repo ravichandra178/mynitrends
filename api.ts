@@ -456,7 +456,7 @@ async function handleSelectPage(req: Request): Promise<Response> {
     const client = await getConnection();
     
     // Update settings with the newly selected page credentials
-    const updatePayload = {
+    const updatePayload: Record<string, any> = {
       facebook_page_id: pageId,
       facebook_page_access_token: accessToken,
     };
@@ -496,7 +496,7 @@ async function handleSelectPage(req: Request): Promise<Response> {
     return new Response(JSON.stringify({ 
       success: true, 
       message: "Default Facebook Page updated successfully", 
-      pageId: result.rows[0]?.facebook_page_id,
+      pageId: (result.rows[0] as any)?.facebook_page_id,
       accessTokenUpdated: true
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

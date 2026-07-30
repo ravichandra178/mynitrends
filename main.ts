@@ -426,9 +426,9 @@ async function postToFacebookJob(postId: string): Promise<{ success: boolean; fa
         const formData = new FormData();
         formData.append("source", imageBlob, "image.png");
         formData.append("caption", post.content);
-        formData.append("access_token", facebookAccessToken);
+        formData.append("access_token", resolvedAccessToken);
 
-        const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/photos`, {
+        const fbRes = await fetch(`https://graph.facebook.com/${resolvedPageId}/photos`, {
           method: "POST",
           body: formData,
         });
@@ -441,10 +441,10 @@ async function postToFacebookJob(postId: string): Promise<{ success: boolean; fa
         fbPostId = fbData.post_id || fbData.id;
       } catch (imageErr) {
         console.warn("Image upload failed, trying text fallback: ", imageErr);
-        const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/feed`, {
+        const fbRes = await fetch(`https://graph.facebook.com/${resolvedPageId}/feed`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: post.content, access_token: facebookAccessToken }),
+          body: JSON.stringify({ message: post.content, access_token: resolvedAccessToken }),
         });
 
         const fbData = await fbRes.json();
@@ -455,10 +455,10 @@ async function postToFacebookJob(postId: string): Promise<{ success: boolean; fa
         fbPostId = fbData.id;
       }
     } else {
-      const fbRes = await fetch(`https://graph.facebook.com/${facebookPageId}/feed`, {
+      const fbRes = await fetch(`https://graph.facebook.com/${resolvedPageId}/feed`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: post.content, access_token: facebookAccessToken }),
+        body: JSON.stringify({ message: post.content, access_token: resolvedAccessToken }),
       });
 
       const fbData = await fbRes.json();
@@ -737,8 +737,16 @@ async function handleAiReply(req: Request): Promise<Response> {
   }
 
   try {
-    const pageId = Deno.env.get("FACEBOOK_PAGE_ID") || Deno.env.get("VITE_FACEBOOK_PAGE_ID") || "";
-    const accessToken = Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") || Deno.env.get("VITE_FACEBOOK_PAGE_ACCESS_TOKEN") || "";
+    let pageId = Deno.env.get("FACEBOOK_PAGE_ID") || Deno.env.get("VITE_FACEBOOK_PAGE_ID") || "";
+    let accessToken = Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") || Deno.env.get("VITE_FACEBOOK_PAGE_ACCESS_TOKEN") || "";
+
+    if (!pageId || !accessToken) {
+      try {
+        const settings = await getSettingsFromDb();
+        if (!pageId) pageId = settings.facebook_page_id || settings.facebook_app_id || "";
+        if (!accessToken) accessToken = settings.facebook_page_access_token || "";
+      } catch { /* ignore */ }
+    }
 
     if (!pageId || !accessToken) {
       appendAiReplyLog("error", "Missing Facebook page credentials");
