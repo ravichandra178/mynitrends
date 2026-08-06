@@ -17,21 +17,40 @@ serve(async (req) => {
 
     const client = await pool.connect();
     try {
-      // Get settings for access token
+      // Get settings for page ID and access token
       const settingsResult = await client.queryObject<any>(
-        "SELECT facebook_page_access_token FROM settings LIMIT 1"
+        "SELECT facebook_page_id, facebook_app_id, facebook_page_access_token FROM settings LIMIT 1"
       );
       const settings = settingsResult.rows?.[0];
-      if (!settings?.facebook_page_access_token) throw new Error("Facebook access token not configured");
+      const accessToken = settings?.facebook_page_access_token;
+      const pageId = settings?.facebook_page_id || settings?.facebook_app_id;
 
-      const fbRes = await fetch(
-        `https://graph.facebook.com/${facebookPostId}?fields=likes.summary(true),comments.summary(true)&access_token=${settings.facebook_page_access_token}`
+      if (!accessToken) throw new Error("Facebook access token not configured");
+      if (!pageId) throw new Error("Facebook page ID not configured");
+
+      const pagePostsRes = await fetch(
+        `https://graph.facebook.com/v25.0/${pageId}/posts?fields=id,message,created_time,likes.summary(true),comments.summary(true),shares&limit=100&access_token=${encodeURIComponent(accessToken)}`
       );
-      const fbData = await fbRes.json();
-      if (fbData.error) throw new Error(fbData.error.message);
+      const pagePostsData = await pagePostsRes.json();
+      if (pagePostsData.error) throw new Error(pagePostsData.error.message);
 
-      const likes = fbData.likes?.summary?.total_count ?? 0;
-      const comments = fbData.comments?.summary?.total_count ?? 0;
+      const matchedPost = Array.isArray(pagePostsData.data)
+        ? pagePostsData.data.find((post: any) => post.id === facebookPostId)
+        : null;
+
+      let likes = matchedPost?.likes?.summary?.total_count ?? 0;
+      let comments = matchedPost?.comments?.summary?.total_count ?? 0;
+
+      if (!matchedPost) {
+        const directRes = await fetch(
+          `https://graph.facebook.com/v25.0/${facebookPostId}?fields=id,likes.summary(true),comments.summary(true)&access_token=${encodeURIComponent(accessToken)}`
+        );
+        const directData = await directRes.json();
+        if (directData.error) throw new Error(directData.error.message);
+
+        likes = directData.likes?.summary?.total_count ?? 0;
+        comments = directData.comments?.summary?.total_count ?? 0;
+      }
 
       await client.queryObject(
         "UPDATE posts SET engagement_likes = $1, engagement_comments = $2 WHERE id = $3",

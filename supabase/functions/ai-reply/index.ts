@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getReplyTargetId } from "../../../src/lib/facebook-thread-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -58,7 +59,7 @@ serve(async (req) => {
     const replyLimit = Number(Deno.env.get("REPLY_THREAD_LIMIT") || "10");
 
     // Fetch recent posts from Facebook
-    const postsUrl = `https://graph.facebook.com/v20.0/${pageId}/published_posts?fields=id,message,created_time&limit=${postLimit}&access_token=${encodeURIComponent(accessToken)}`;
+    const postsUrl = `https://graph.facebook.com/v20.0/${pageId}/posts?fields=id,message,created_time&limit=${postLimit}&access_token=${encodeURIComponent(accessToken)}`;
     const postsRes = await fetch(postsUrl);
     const postsData = await postsRes.json();
 
@@ -154,8 +155,7 @@ Rules:
       method: "POST" 
     });
 
-    // Determine reply target (parent if nested comment)
-    const replyTargetId = targetComment.parent?.id || targetComment.id;
+    const replyTargetId = getReplyTargetId(targetComment.parent) || targetComment.id;
     const replyUrl = `https://graph.facebook.com/v20.0/${replyTargetId}/comments?access_token=${encodeURIComponent(accessToken)}`;
 
     const replyRes = await fetch(replyUrl, {

@@ -618,6 +618,7 @@ async function handleFetchEngagement(req: Request): Promise<Response> {
 
     // Resolve access token: env vars first (always fresh) → DB settings last (may be stale)
     let accessToken = "";
+    let pageId = "";
     let tokenSource = "none";
 
     // 1. Env vars — always fresh from deployment
@@ -628,56 +629,81 @@ async function handleFetchEngagement(req: Request): Promise<Response> {
     }
 
     // 2. DB settings — last resort (may contain stale/expired tokens)
-    if (!accessToken) {
+    if (!pageId || !accessToken) {
       try {
         const settings = await getSettingsFromDb();
-        if (settings.facebook_page_access_token) {
+        if (!pageId) pageId = settings.facebook_page_id || settings.facebook_app_id || "";
+        if (!accessToken && settings.facebook_page_access_token) {
           accessToken = settings.facebook_page_access_token;
           tokenSource = "db_settings";
         }
       } catch { /* ignore */ }
     }
 
+    if (!pageId) {
+      pageId = Deno.env.get("FACEBOOK_PAGE_ID") || Deno.env.get("VITE_FACEBOOK_PAGE_ID") || "";
+    }
+
     console.log(`[fetch-engagement] token source: ${tokenSource}, facebookPostId: ${facebookPostId}`);
 
-    if (!accessToken) {
-      return new Response(JSON.stringify({ error: "Facebook access token not configured" }), {
+    if (!pageId || !accessToken) {
+      return new Response(JSON.stringify({ error: "Facebook page ID or access token not configured" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Query the individual post directly — same field pattern as the confirmed-working curl:
-    // GET /v25.0/{post_id}?fields=likes.summary(true),comments.summary(true)&access_token=...
-    const graphUrl =
-      `https://graph.facebook.com/v25.0/${facebookPostId}` +
-      `?fields=id,likes.summary(true),comments.summary(true)` +
-      `&access_token=${encodeURIComponent(accessToken)}`;
+    const pagePostsUrl =
+      `https://graph.facebook.com/v25.0/${pageId}/posts` +
+      `?fields=id,message,created_time,likes.summary(true),comments.summary(true),shares` +
+      `&limit=100&access_token=${encodeURIComponent(accessToken)}`;
 
-    console.log(`[fetch-engagement] Querying Graph API v25.0 for post: ${facebookPostId}`);
-    const fbRes = await fetch(graphUrl);
-    const fbData = await fbRes.json();
+    console.log(`[fetch-engagement] Querying page posts for: ${facebookPostId}`);
+    const pagePostsRes = await fetch(pagePostsUrl);
+    const pagePostsData = await pagePostsRes.json();
 
-    if (!fbRes.ok || fbData.error) {
-      const errMsg = fbData.error?.message || `Graph API error (HTTP ${fbRes.status})`;
-      console.error(`[fetch-engagement] Graph API error (token source: ${tokenSource}):`, errMsg);
-      // Surface the expired-token error clearly so it shows in the UI
-      const isExpired = errMsg.includes("Session has expired") || errMsg.includes("expired");
-      return new Response(
-        JSON.stringify({
-          error: isExpired
-            ? `Token expired (source: ${tokenSource}). Please update your Facebook Page Access Token in Settings.`
-            : errMsg,
-          tokenSource,
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    let likes = 0;
+    let comments = 0;
+    let source = "page_posts";
+
+    const matchedPost = Array.isArray(pagePostsData.data)
+      ? pagePostsData.data.find((post: any) => post.id === facebookPostId)
+      : null;
+
+    if (pagePostsRes.ok && !pagePostsData.error && matchedPost) {
+      likes = matchedPost.likes?.summary?.total_count ?? 0;
+      comments = matchedPost.comments?.summary?.total_count ?? 0;
+    } else {
+      const directUrl =
+        `https://graph.facebook.com/v25.0/${facebookPostId}` +
+        `?fields=id,likes.summary(true),comments.summary(true)` +
+        `&access_token=${encodeURIComponent(accessToken)}`;
+
+      console.log(`[fetch-engagement] Page post list miss, falling back to direct post lookup for: ${facebookPostId}`);
+      const directRes = await fetch(directUrl);
+      const directData = await directRes.json();
+
+      if (!directRes.ok || directData.error) {
+        const errMsg = directData.error?.message || pagePostsData.error?.message || `Graph API error (HTTP ${pagePostsRes.status})`;
+        console.error(`[fetch-engagement] Graph API error (token source: ${tokenSource}):`, errMsg);
+        const isExpired = errMsg.includes("Session has expired") || errMsg.includes("expired");
+        return new Response(
+          JSON.stringify({
+            error: isExpired
+              ? `Token expired (source: ${tokenSource}). Please update your Facebook Page Access Token in Settings.`
+              : errMsg,
+            tokenSource,
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      likes = directData.likes?.summary?.total_count ?? 0;
+      comments = directData.comments?.summary?.total_count ?? 0;
+      source = "direct_post";
     }
 
-    const likes = fbData.likes?.summary?.total_count ?? 0;
-    const comments = fbData.comments?.summary?.total_count ?? 0;
-
-    console.log(`[fetch-engagement] ✅ likes: ${likes}, comments: ${comments}, source: ${tokenSource}`);
+    console.log(`[fetch-engagement] ✅ likes: ${likes}, comments: ${comments}, source: ${source}`);
 
     const client = await getConnection();
     try {
@@ -748,7 +774,7 @@ async function performAiReplyCheck(): Promise<{ success: boolean; message?: stri
     const postLimit = Number(Deno.env.get("POST_LIMIT") || "3");
     const replyLimit = Number(Deno.env.get("REPLY_THREAD_LIMIT") || "10");
 
-    const postsUrl = `https://graph.facebook.com/v20.0/${pageId}/published_posts?fields=id,message,created_time&limit=${postLimit}&access_token=${encodeURIComponent(accessToken)}`;
+    const postsUrl = `https://graph.facebook.com/v20.0/${pageId}/posts?fields=id,message,created_time&limit=${postLimit}&access_token=${encodeURIComponent(accessToken)}`;
     const postsRes = await fetch(postsUrl);
     const postsData = await postsRes.json();
 
@@ -805,9 +831,7 @@ async function performAiReplyCheck(): Promise<{ success: boolean; message?: stri
     // Like the comment
     await fetch(`https://graph.facebook.com/v20.0/${targetComment.id}/likes?access_token=${encodeURIComponent(accessToken)}`, { method: "POST" });
 
-    // FIX: Determine reply target. If it's a nested comment, we must reply to the parent.
-    // If targetComment.parent exists, we reply to the parent ID.
-    const replyTargetId = targetComment.parent?.id || targetComment.id;
+    const replyTargetId = getReplyTargetId(targetComment.parent) || targetComment.id;
     const replyUrl = `https://graph.facebook.com/v20.0/${replyTargetId}/comments?access_token=${encodeURIComponent(accessToken)}`;
 
     const replyRes = await fetch(replyUrl, {
@@ -858,16 +882,52 @@ async function handleAiReply(req: Request): Promise<Response> {
   });
 }
 
-// Register Deno cron job to run every 15 minutes on Deno Deploy
-try {
-  Deno.cron("Facebook AI Autoreply", "*/15 * * * *", async () => {
-    console.log("[CRON] Running scheduled Facebook AI Autoreply check...");
-    const result = await performAiReplyCheck();
-    console.log("[CRON] Facebook AI Autoreply check result:", result);
-  });
-  console.log("✅ Registered Facebook AI Autoreply cron job (runs every 15 minutes)");
-} catch (e) {
-  console.error("⚠️ Failed to register Deno cron job:", e);
+async function handleFacebookWebhook(req: Request): Promise<Response> {
+  const verifyToken = Deno.env.get("FACEBOOK_WEBHOOK_VERIFY_TOKEN") || Deno.env.get("FB_WEBHOOK_VERIFY_TOKEN") || "";
+
+  if (req.method === "GET") {
+    const url = new URL(req.url);
+    const mode = url.searchParams.get("hub.mode") || "";
+    const token = url.searchParams.get("hub.verify_token") || "";
+    const challenge = url.searchParams.get("hub.challenge") || "";
+
+    if (mode === "subscribe" && verifyToken && token === verifyToken) {
+      return new Response(challenge, { status: 200 });
+    }
+
+    return new Response("Verification failed", { status: 403 });
+  }
+
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+  }
+
+  try {
+    const payload = await req.json();
+    console.log("[facebook-webhook] incoming payload", JSON.stringify(payload));
+
+    const entries = Array.isArray(payload?.entry) ? payload.entry : [];
+    const hasPageEvent = entries.some((entry: any) => {
+      const changes = Array.isArray(entry?.changes) ? entry.changes : [];
+      return changes.some((change: any) => ["feed", "comments", "mention"].includes(change?.field)) || entry?.messaging?.length > 0 || entry?.standby?.length > 0;
+    });
+
+    if (payload?.object === "page" && hasPageEvent) {
+      const result = await performAiReplyCheck();
+      console.log("[facebook-webhook] AI reply check result:", result);
+    }
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    console.error("[facebook-webhook] error:", errorMessage);
+    return new Response(JSON.stringify({ success: false, error: errorMessage }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 }
 
 async function handleTestConnection(req: Request): Promise<Response> {
@@ -1782,6 +1842,7 @@ Deno.serve(async (req) => {
     if (path === "/api/post-to-facebook" && method === "POST") return await handlePostToFacebook(req);
     if (path === "/api/fetch-engagement" && method === "POST") return await handleFetchEngagement(req);
     if (path === "/api/test-connection" && method === "POST") return await handleTestConnection(req);
+    if (path === "/api/facebook-webhook") return await handleFacebookWebhook(req);
     if (path === "/api/test-facebook-connection" && method === "POST") return await handleTestFacebookConnection(req);
     if (path === "/api/test-groq" && method === "POST") return await handleTestGROQ(req);
     if (path === "/api/test-huggingface" && method === "POST") return await handleTestHuggingFace(req);

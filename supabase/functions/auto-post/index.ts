@@ -114,14 +114,29 @@ serve(async (req) => {
 
           // Fetch engagement
           const engRes = await fetch(
-            `https://graph.facebook.com/${fbPostId}?fields=likes.summary(true),comments.summary(true)&access_token=${facebookAccessToken}`
+            `https://graph.facebook.com/v25.0/${facebookPageId}/posts?fields=id,message,created_time,likes.summary(true),comments.summary(true),shares&limit=100&access_token=${encodeURIComponent(facebookAccessToken)}`
           );
           const engData = await engRes.json();
-          if (!engData.error) {
+          const matchedPost = Array.isArray(engData.data)
+            ? engData.data.find((item: any) => item.id === fbPostId)
+            : null;
+
+          if (!engData.error && matchedPost) {
             await client.queryObject(
               "UPDATE posts SET engagement_likes = $1, engagement_comments = $2 WHERE id = $3",
-              [engData.likes?.summary?.total_count ?? 0, engData.comments?.summary?.total_count ?? 0, post.id]
+              [matchedPost.likes?.summary?.total_count ?? 0, matchedPost.comments?.summary?.total_count ?? 0, post.id]
             );
+          } else {
+            const directRes = await fetch(
+              `https://graph.facebook.com/v25.0/${fbPostId}?fields=id,likes.summary(true),comments.summary(true)&access_token=${encodeURIComponent(facebookAccessToken)}`
+            );
+            const directData = await directRes.json();
+            if (!directData.error) {
+              await client.queryObject(
+                "UPDATE posts SET engagement_likes = $1, engagement_comments = $2 WHERE id = $3",
+                [directData.likes?.summary?.total_count ?? 0, directData.comments?.summary?.total_count ?? 0, post.id]
+              );
+            }
           }
 
           results.push({ postId: post.id, status: "published", fbPostId });
