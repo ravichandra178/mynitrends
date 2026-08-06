@@ -19,7 +19,7 @@ export async function generateAutoreply(dbUrl: string, groqApiKey: string, comme
       messages: [
         {
           role: "system",
-          content: `You are a helpful social media community manager. Generate thoughtful, engaging autoreply responses to comments.
+          content: Deno.env.get("SYSTEM_PROMPT") || `You are a helpful social media community manager. Generate thoughtful, engaging autoreply responses to comments.
 Rules:
 - Keep replies under 150 characters
 - Be friendly and professional

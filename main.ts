@@ -725,17 +725,7 @@ async function handleGenerateAutoreply(req: Request): Promise<Response> {
   }
 }
 
-async function handleAiReply(req: Request): Promise<Response> {
-  if (req.method === "GET") {
-    return new Response(JSON.stringify(aiReplyLogs), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
-  }
-
+async function performAiReplyCheck(): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
     let pageId = Deno.env.get("FACEBOOK_PAGE_ID") || Deno.env.get("VITE_FACEBOOK_PAGE_ID") || "";
     let accessToken = Deno.env.get("FACEBOOK_PAGE_ACCESS_TOKEN") || Deno.env.get("VITE_FACEBOOK_PAGE_ACCESS_TOKEN") || "";
@@ -750,10 +740,7 @@ async function handleAiReply(req: Request): Promise<Response> {
 
     if (!pageId || !accessToken) {
       appendAiReplyLog("error", "Missing Facebook page credentials");
-      return new Response(JSON.stringify({ success: false, error: "Missing Facebook credentials", logs: aiReplyLogs }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return { success: false, error: "Missing Facebook credentials" };
     }
 
     appendAiReplyLog("info", "Starting AI reply check...");
@@ -768,7 +755,7 @@ async function handleAiReply(req: Request): Promise<Response> {
     if (!postsRes.ok || postsData.error) {
       const msg = postsData.error?.message || "Failed to fetch posts";
       appendAiReplyLog("error", msg);
-      return new Response(JSON.stringify({ success: false, error: msg, logs: aiReplyLogs }), { status: 502, headers: corsHeaders });
+      return { success: false, error: msg };
     }
 
     const posts = postsData.data || [];
@@ -800,7 +787,7 @@ async function handleAiReply(req: Request): Promise<Response> {
 
     if (!targetComment) {
       appendAiReplyLog("info", "No new eligible comments found.");
-      return new Response(JSON.stringify({ success: true, message: "No new comments", logs: aiReplyLogs }), { headers: corsHeaders });
+      return { success: true, message: "No new comments" };
     }
 
     appendAiReplyLog("interaction", `Found comment from ${targetComment.from?.name || "User"}: "${targetComment.message.substring(0, 80)}..."`);
@@ -808,7 +795,7 @@ async function handleAiReply(req: Request): Promise<Response> {
     const groqApiKey = Deno.env.get("GROQ_API_KEY");
     if (!groqApiKey) {
       appendAiReplyLog("error", "GROQ_API_KEY not configured");
-      return new Response(JSON.stringify({ success: false, error: "GROQ_API_KEY not configured", logs: aiReplyLogs }), { status: 500, headers: corsHeaders });
+      return { success: false, error: "GROQ_API_KEY not configured" };
     }
 
     const dbUrl = getDatabaseUrl();
@@ -833,22 +820,54 @@ async function handleAiReply(req: Request): Promise<Response> {
 
     if (!replyRes.ok || replyData.error) {
       appendAiReplyLog("error", `Reply failed: ${replyData.error?.message}`);
-      return new Response(JSON.stringify({ success: false, error: replyData.error?.message, logs: aiReplyLogs }), { status: 502, headers: corsHeaders });
+      return { success: false, error: replyData.error?.message };
     }
 
     appendAiReplyLog("success", `Successfully replied to ${targetComment.parent?.id ? "nested thread" : "post"}: "${replyText}"`);
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: "AI replied successfully in thread",
-      logs: aiReplyLogs 
-    }), { headers: corsHeaders });
+    return { success: true, message: "AI replied successfully in thread" };
 
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     appendAiReplyLog("error", msg);
     console.error("AI Reply Error:", msg);
-    return new Response(JSON.stringify({ success: false, error: msg, logs: aiReplyLogs }), { status: 500, headers: corsHeaders });
+    return { success: false, error: msg };
   }
+}
+
+async function handleAiReply(req: Request): Promise<Response> {
+  if (req.method === "GET") {
+    return new Response(JSON.stringify(aiReplyLogs), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+  }
+
+  const result = await performAiReplyCheck();
+  if (!result.success) {
+    return new Response(JSON.stringify({ success: false, error: result.error, logs: aiReplyLogs }), {
+      status: result.error?.includes("credentials") ? 400 : 502,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  return new Response(JSON.stringify({ success: true, message: result.message, logs: aiReplyLogs }), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+// Register Deno cron job to run every 15 minutes on Deno Deploy
+try {
+  Deno.cron("Facebook AI Autoreply", "*/15 * * * *", async () => {
+    console.log("[CRON] Running scheduled Facebook AI Autoreply check...");
+    const result = await performAiReplyCheck();
+    console.log("[CRON] Facebook AI Autoreply check result:", result);
+  });
+  console.log("✅ Registered Facebook AI Autoreply cron job (runs every 15 minutes)");
+} catch (e) {
+  console.error("⚠️ Failed to register Deno cron job:", e);
 }
 
 async function handleTestConnection(req: Request): Promise<Response> {
